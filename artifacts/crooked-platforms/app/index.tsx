@@ -434,7 +434,8 @@ const StageBackdrop = React.memo(function StageBackdrop({
 
 function makeLevel(width: number, height: number, stage: number) {
   const floorY = height - 48;
-  const worldWidth = width * 6.8;
+  const difficulty = Math.max(0, Math.min(1, (stage - 1) / (MAX_STAGES - 1)));
+  const worldWidth = width * (7.4 + difficulty * 2.6);
   const bossTier = stage % BOSS_INTERVAL === 0 ? stage / BOSS_INTERVAL : 0;
   const bossHealth = bossTier > 0 ? bossTier + 2 : 0;
   const bossWidth = bossTier > 0
@@ -456,14 +457,13 @@ function makeLevel(width: number, height: number, stage: number) {
     : null;
   const goalX = worldWidth - width * 0.48;
   const lastObstacleX = boss ? boss.x - width * 0.8 : goalX - width * 0.52;
-  const obstacleCount = Math.min(15, 4 + Math.floor((stage - 1) / 36));
+  const obstacleCount = Math.min(18, 5 + Math.floor(difficulty * 13));
   const firstObstacleX = width * 0.88;
   const spacing = (lastObstacleX - firstObstacleX) / Math.max(1, obstacleCount);
   const pits: Array<{ start: number; end: number }> = [];
   const hazards: Hazard[] = [];
   const coins: Coin[] = [];
   const hazardPool: Hazard['kind'][] = ['teeth', 'blob'];
-  const difficulty = Math.min(1, stage / MAX_STAGES);
 
   for (let index = 0; index < obstacleCount; index += 1) {
     const baseX = firstObstacleX + spacing * index;
@@ -732,6 +732,8 @@ export default function GameScreen() {
     running.current = true;
     const playerWidth = 31;
     const playerHeight = 36;
+    const stageProgress = Math.max(0, Math.min(1, (stage - 1) / (MAX_STAGES - 1)));
+    const moveSpeed = 205 + stageProgress * 42;
     const step = (time: number) => {
       if (!running.current) return;
       const current = runtime.current;
@@ -739,7 +741,7 @@ export default function GameScreen() {
       current.lastTime = time;
       current.elapsed += delta * 1000;
       const direction = (controls.current.right ? 1 : 0) - (controls.current.left ? 1 : 0);
-      current.vx = direction * 205;
+      current.vx = direction * moveSpeed;
       current.x = Math.max(0, Math.min(level.worldWidth - playerWidth, current.x + current.vx * delta));
       if (controls.current.jump && current.grounded) {
         current.vy = -450;
