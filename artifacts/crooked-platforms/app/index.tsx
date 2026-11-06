@@ -30,6 +30,7 @@ import Svg, {
   Path,
 } from 'react-native-svg';
 import rawColors from '@/constants/colors';
+import { EnemyArt, type EnemyKind } from '../components/GameEntityArt';
 
 const colors = rawColors.light;
 
@@ -67,6 +68,19 @@ type Hazard = {
   width: number;
   height: number;
   kind: 'teeth' | 'blob';
+};
+
+type Enemy = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  kind: EnemyKind;
+  patrolStart: number;
+  patrolEnd: number;
+  speed: number;
+  phase: number;
 };
 
 type Coin = {
@@ -542,8 +556,10 @@ function makeLevel(width: number, height: number, stage: number) {
   const spacing = (lastObstacleX - firstObstacleX) / Math.max(1, obstacleCount);
   const pits: Array<{ start: number; end: number }> = [];
   const hazards: Hazard[] = [];
+  const enemies: Enemy[] = [];
   const coins: Coin[] = [];
   const hazardPool: Hazard['kind'][] = ['teeth', 'blob'];
+  const enemyPool: EnemyKind[] = ['magma', 'bat', 'mimic'];
 
   for (let index = 0; index < obstacleCount; index += 1) {
     const baseX = firstObstacleX + spacing * index;
@@ -572,6 +588,50 @@ function makeLevel(width: number, height: number, stage: number) {
         letter: 'ASHOS'[index % 5],
       });
     }
+  }
+  const enemyCount = Math.min(7, 1 + Math.floor(difficulty * 6));
+  const enemyWidth = 46;
+  const enemyHeight = 42;
+  const patrolRadius = width * 0.08;
+  for (let index = 0; index < enemyCount; index += 1) {
+    const segment = Math.floor(((index + 1) * obstacleCount) / (enemyCount + 1));
+    const baseX = firstObstacleX + spacing * (segment + 0.5);
+    let enemyX = baseX;
+    let clearPosition = false;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const offset = attempt === 0
+        ? 0
+        : (attempt % 2 === 1 ? 1 : -1) * Math.ceil(attempt / 2) * width * 0.16;
+      const candidateX = baseX + offset;
+      const insidePath = candidateX >= firstObstacleX && candidateX + enemyWidth < lastObstacleX;
+      const overlapsPit = pits.some((pit) =>
+        candidateX - patrolRadius < pit.end && candidateX + enemyWidth + patrolRadius > pit.start,
+      );
+      const overlapsHazard = hazards.some((hazard) =>
+        candidateX - patrolRadius < hazard.x + hazard.width + 20 &&
+        candidateX + enemyWidth + patrolRadius > hazard.x - 20,
+      );
+      if (insidePath && !overlapsPit && !overlapsHazard) {
+        enemyX = candidateX;
+        clearPosition = true;
+        break;
+      }
+    }
+    if (!clearPosition) continue;
+    const kind = enemyPool[Math.floor(random() * enemyPool.length)];
+    const enemyY = floorY - (kind === 'bat' ? 74 : enemyHeight);
+    enemies.push({
+      id: `stage-${stage}-enemy-${index}`,
+      x: enemyX,
+      y: enemyY,
+      width: enemyWidth,
+      height: enemyHeight,
+      kind,
+      patrolStart: Math.max(firstObstacleX, enemyX - patrolRadius),
+      patrolEnd: Math.min(lastObstacleX - enemyWidth, enemyX + patrolRadius),
+      speed: 1.1 + difficulty * 0.65,
+      phase: random() * Math.PI * 2,
+    });
   }
   pits.sort((a, b) => a.start - b.start);
   const platforms: PlatformPiece[] = [];
@@ -603,6 +663,7 @@ function makeLevel(width: number, height: number, stage: number) {
   return {
     platforms,
     hazards,
+    enemies,
     coins,
     boss,
     worldWidth,
@@ -622,6 +683,17 @@ function overlaps(
   bh: number,
 ) {
   return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function getEnemyPosition(enemy: Enemy, elapsedMs: number) {
+  const phase = (elapsedMs / 1000) * enemy.speed + enemy.phase;
+  const patrolCenter = (enemy.patrolStart + enemy.patrolEnd) / 2;
+  const patrolRadius = (enemy.patrolEnd - enemy.patrolStart) / 2;
+  const bob = Math.sin(phase * 2) * (enemy.kind === 'bat' ? 7 : 2);
+  return {
+    x: patrolCenter + Math.sin(phase) * patrolRadius,
+    y: enemy.y + bob,
+  };
 }
 
 export default function GameScreen() {
@@ -645,6 +717,7 @@ export default function GameScreen() {
   const controls = useRef({ left: false, right: false, jump: false });
   const profileRef = useRef<PlayerProfile>(defaultProfile);
   const collectedCoins = useRef<Set<string>>(new Set());
+  const defeatedEnemies = useRef<Set<string>>(new Set());
   const animation = useRef<number | null>(null);
   const running = useRef(false);
   const resultCardAnimation = useAnimatedStyle(() => ({
@@ -766,6 +839,7 @@ export default function GameScreen() {
     setStage(safeStage);
     resetGame(safeStage);
     collectedCoins.current = new Set();
+    defeatedEnemies.current = new Set();
     controls.current = { left: false, right: false, jump: false };
     running.current = true;
     setMode('playing');
@@ -901,6 +975,36 @@ export default function GameScreen() {
         }
       }
 
+      let enemyCollision = false;
+      for (const enemy of level.enemies) {
+        if (defeatedEnemies.current.has(enemy.id)) continue;
+        const enemyPosition = getEnemyPosition(enemy, current.elapsed);
+        const touchingEnemy = overlaps(
+          current.x + 4,
+          current.y + 5,
+          playerWidth - 8,
+          playerHeight - 6,
+          enemyPosition.x,
+          enemyPosition.y,
+          enemy.width,
+          enemy.height,
+        );
+        if (!touchingEnemy) continue;
+        const stompedEnemy = current.vy >= 0 && previousBottom <= enemyPosition.y + 12;
+        if (stompedEnemy) {
+          current.y = enemyPosition.y - playerHeight;
+          current.vy = -330;
+          current.grounded = false;
+          defeatedEnemies.current.add(enemy.id);
+          const currentProfile = profileRef.current;
+          saveProfile({ ...currentProfile, coins: currentProfile.coins + 1 });
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+        } else {
+          enemyCollision = true;
+        }
+        break;
+      }
+
       let bossCollision = false;
       if (level.boss && current.bossHealth > 0) {
         const touchingBoss = overlaps(
@@ -933,7 +1037,7 @@ export default function GameScreen() {
       const fell = current.y > gameSize.height + 40;
       const reachedGoal = current.x + playerWidth > level.goalX && current.y < level.goalY + 70 && current.y + playerHeight > level.goalY - 30;
       setSnapshot({ ...current });
-      if (hitHazard || bossCollision || fell) {
+      if (hitHazard || enemyCollision || bossCollision || fell) {
         void finishRun('lost');
         return;
       }
@@ -1142,7 +1246,9 @@ export default function GameScreen() {
               ? snapshot.bossHealth > 0
                 ? `اضربه من فوق • باقي ${snapshot.bossHealth} ضربات`
                 : 'انفتح الباب! كمل للنهاية'
-              : 'طريق مستقيم... بس العوائق عشوائية'}
+              : level.enemies.length > 0
+                ? 'اقفز فوق الوحوش • كل هزيمة = A'
+                : 'طريق مستقيم... بس العوائق عشوائية'}
           </Text>
           <View style={styles.inGameWallet}>
             <Text style={styles.walletGlyph}>A</Text>
@@ -1162,6 +1268,26 @@ export default function GameScreen() {
               ]}
             />
           ))}
+          {level.enemies.map((enemy) => {
+            if (defeatedEnemies.current.has(enemy.id)) return null;
+            const enemyPosition = getEnemyPosition(enemy, snapshot.elapsed);
+            return (
+              <View
+                key={enemy.id}
+                style={[
+                  styles.enemy,
+                  {
+                    left: enemyPosition.x - cameraX,
+                    top: enemyPosition.y,
+                    width: enemy.width,
+                    height: enemy.height,
+                  },
+                ]}
+              >
+                <EnemyArt kind={enemy.kind} />
+              </View>
+            );
+          })}
           {level.hazards.map((hazard) => (
             <View key={hazard.id} style={[styles.hazard, { left: hazard.x - cameraX, top: hazard.y, width: hazard.width, height: hazard.height }]}>
               <TrapArt kind={hazard.kind} />
@@ -1757,6 +1883,12 @@ const styles = StyleSheet.create({
   },
   hazard: {
     position: 'absolute',
+  },
+  enemy: {
+    position: 'absolute',
+    zIndex: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   coin: {
     position: 'absolute',
