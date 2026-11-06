@@ -18,6 +18,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, {
@@ -223,6 +225,22 @@ function MusicToggle({
 
 const MAX_STAGES = 500;
 const BOSS_INTERVAL = 50;
+
+const playerRanks = [
+  { name: 'مبتدئ', start: 1, end: 24, color: colors.sky },
+  { name: 'مغامر', start: 25, end: 74, color: colors.lime },
+  { name: 'متحدّي الزعماء', start: 75, end: 149, color: colors.gold },
+  { name: 'محترف', start: 150, end: 249, color: colors.coral },
+  { name: 'أسطورة', start: 250, end: 399, color: colors.violetLight },
+  { name: 'بطل آشش', start: 400, end: MAX_STAGES, color: colors.gold },
+];
+
+function getPlayerRank(stage: number) {
+  const safeStage = Math.max(1, Math.min(MAX_STAGES, Math.floor(stage)));
+  const rank = [...playerRanks].reverse().find((item) => safeStage >= item.start) ?? playerRanks[0];
+  const progress = rank.end === rank.start ? 1 : (safeStage - rank.start) / (rank.end - rank.start);
+  return { ...rank, progress };
+}
 
 type StageBackdropTheme = {
   name: string;
@@ -559,12 +577,28 @@ export default function GameScreen() {
     width: Math.min(window.width, 430),
     height: Math.max(540, window.height - insets.top - insets.bottom - 20),
   });
+  const resultEntrance = useSharedValue(0);
+  const resultWiggle = useSharedValue(0);
   const runtime = useRef<GameRuntime>({ ...initialSnapshot, vx: 0, lastTime: 0 });
   const controls = useRef({ left: false, right: false, jump: false });
   const profileRef = useRef<PlayerProfile>(defaultProfile);
   const collectedCoins = useRef<Set<string>>(new Set());
   const animation = useRef<number | null>(null);
   const running = useRef(false);
+  const resultCardAnimation = useAnimatedStyle(() => ({
+    opacity: resultEntrance.value,
+    transform: [
+      { translateY: 22 * (1 - resultEntrance.value) },
+      { scale: 0.94 + resultEntrance.value * 0.06 },
+    ],
+  }));
+  const resultCharacterAnimation = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: mode === 'won' ? -13 * Math.abs(resultWiggle.value) : 3 * Math.abs(resultWiggle.value) },
+      { rotateZ: `${mode === 'lost' ? resultWiggle.value * 9 : 0}deg` },
+      { scale: mode === 'won' ? 1 + Math.abs(resultWiggle.value) * 0.08 : 1 },
+    ],
+  }));
 
   useEffect(() => {
     musicPlayer.loop = true;
@@ -573,6 +607,31 @@ export default function GameScreen() {
       musicPlayer.pause();
     }
   }, [mode, musicEnabled, musicPlayer]);
+
+  useEffect(() => {
+    if (mode === 'won') {
+      resultEntrance.value = withSpring(1, { damping: 16, stiffness: 175 });
+      resultWiggle.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 170 }),
+          withTiming(0, { duration: 170 }),
+        ),
+        2,
+        false,
+      );
+    } else if (mode === 'lost') {
+      resultEntrance.value = withSpring(1, { damping: 18, stiffness: 195 });
+      resultWiggle.value = withSequence(
+        withTiming(1, { duration: 65 }),
+        withTiming(-1, { duration: 80 }),
+        withTiming(0.6, { duration: 65 }),
+        withTiming(0, { duration: 120 }),
+      );
+    } else {
+      resultEntrance.value = 0;
+      resultWiggle.value = 0;
+    }
+  }, [mode, resultEntrance, resultWiggle]);
 
   useEffect(() => {
     let active = true;
@@ -842,6 +901,7 @@ export default function GameScreen() {
   const jump = () => {
     controls.current.jump = true;
   };
+  const playerRank = getPlayerRank(profile.unlockedStage);
 
   if (mode === 'wardrobe') {
     return (
@@ -937,14 +997,22 @@ export default function GameScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
-              <Text style={styles.statNumber}>03</Text>
-              <Text style={styles.statLabel}>أنواع عوائق</Text>
+              <Text style={styles.statRank}>{playerRank.name}</Text>
+              <Text style={styles.statLabel}>تصنيفك المحلي</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.stat}>
               <Text style={styles.statNumber}>∞</Text>
               <Text style={styles.statLabel}>محاولات</Text>
             </View>
+          </View>
+          <View style={styles.rankProgressTrack}>
+            <View
+              style={[
+                styles.rankProgressFill,
+                { width: `${playerRank.progress * 100}%`, backgroundColor: playerRank.color },
+              ]}
+            />
           </View>
           <View style={styles.menuActions}>
             <Pressable
@@ -1074,7 +1142,10 @@ export default function GameScreen() {
       </LinearGradient>
       {(mode === 'lost' || mode === 'won') && (
         <View style={styles.overlay}>
-          <View style={styles.resultCard}>
+          <Animated.View style={[styles.resultCard, resultCardAnimation]}>
+            <Animated.View style={[styles.resultCharacter, resultCharacterAnimation]}>
+              <CreatureArt compact skinId={profile.equippedSkin} />
+            </Animated.View>
             <View style={styles.resultIcon}>{mode === 'won' ? <Text style={styles.resultIconText}>✓</Text> : <Text style={styles.resultIconText}>!</Text>}</View>
             <Text style={styles.resultKicker}>{mode === 'won' ? `خلصت المرحلة ${stage}` : `المحاولة انتهت في المرحلة ${stage}`}</Text>
             <Text style={styles.resultTitle}>
@@ -1087,6 +1158,7 @@ export default function GameScreen() {
                   : `عدّيت المرحلة ${stage}. الطريق الجاي فيه عوائق أكتر.`
                 : 'جرّب مرة تانية، وخليك أسرع من الفخاخ.'}
             </Text>
+            <Text style={styles.resultRank}>تصنيفك المحلي: {playerRank.name}</Text>
             {mode === 'won' && best > 0 && <Text style={styles.bestTime}>أفضل وقت {best.toFixed(1)} ث</Text>}
             <Pressable
               testID="retry-game"
@@ -1100,7 +1172,7 @@ export default function GameScreen() {
             <Pressable testID="result-menu" onPress={() => setMode('menu')} style={styles.menuLink}>
               <Text style={styles.menuLinkText}>رجوع للقائمة</Text>
             </Pressable>
-          </View>
+          </Animated.View>
         </View>
       )}
     </View>
@@ -1259,11 +1331,30 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
   },
+  statRank: {
+    color: colors.gold,
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+    writingDirection: 'rtl',
+  },
   statLabel: {
     color: colors.paper,
     fontSize: 10,
     marginTop: 3,
     opacity: 0.75,
+  },
+  rankProgressTrack: {
+    width: '72%',
+    height: 5,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: colors.violetLight,
+    marginTop: -10,
+  },
+  rankProgressFill: {
+    height: '100%',
+    borderRadius: 4,
   },
   statDivider: {
     height: 29,
@@ -1720,6 +1811,14 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
   },
+  resultCharacter: {
+    width: 74,
+    height: 62,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
   resultIcon: {
     width: 52,
     height: 52,
@@ -1755,6 +1854,13 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     textAlign: 'center',
     marginTop: 8,
+    writingDirection: 'rtl',
+  },
+  resultRank: {
+    color: colors.violetLight,
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 12,
     writingDirection: 'rtl',
   },
   bestTime: {
