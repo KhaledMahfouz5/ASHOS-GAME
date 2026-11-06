@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Dimensions,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,6 +42,7 @@ type SkinDefinition = {
   price: number;
   body: string;
   accent: string;
+  imageSource?: number;
 };
 
 type PlayerProfile = {
@@ -106,11 +108,46 @@ const initialSnapshot: GameSnapshot = {
 };
 
 const skins: SkinDefinition[] = [
-  { id: 'starter', name: 'الأساسي', price: 0, body: colors.lime, accent: colors.coral },
-  { id: 'ember', name: 'الشرارة', price: 20, body: colors.coral, accent: colors.gold },
-  { id: 'ocean', name: 'المحيط', price: 45, body: colors.sky, accent: colors.violet },
-  { id: 'royal', name: 'الملكي', price: 75, body: colors.violetLight, accent: colors.lime },
-  { id: 'sun', name: 'الشمس', price: 110, body: colors.gold, accent: colors.coral },
+  {
+    id: 'starter',
+    name: 'بطل القميص العنكبوتي',
+    price: 0,
+    body: colors.coral,
+    accent: colors.gold,
+    imageSource: require('../assets/characters/spider-hero.jpg'),
+  },
+  {
+    id: 'ember',
+    name: 'سونيك الذهبي',
+    price: 20,
+    body: colors.gold,
+    accent: colors.coral,
+    imageSource: require('../assets/characters/golden-sonic.jpg'),
+  },
+  {
+    id: 'ocean',
+    name: 'السنجاب الطائر',
+    price: 45,
+    body: colors.sky,
+    accent: colors.violet,
+    imageSource: require('../assets/characters/flying-squirrel.jpg'),
+  },
+  {
+    id: 'royal',
+    name: 'غوكو',
+    price: 75,
+    body: colors.violetLight,
+    accent: colors.lime,
+    imageSource: require('../assets/characters/goku.jpg'),
+  },
+  {
+    id: 'sun',
+    name: 'المقاتل الذهبي',
+    price: 110,
+    body: colors.gold,
+    accent: colors.coral,
+    imageSource: require('../assets/characters/golden-rival.jpg'),
+  },
   { id: 'ghost', name: 'الشبح', price: 160, body: colors.paper, accent: colors.sky },
 ];
 
@@ -123,9 +160,34 @@ const defaultProfile: PlayerProfile = {
 
 const PROFILE_STORAGE_KEY = 'ashos-game-player-profile-v1';
 
-function CreatureArt({ compact = false, skinId = 'starter' }: { compact?: boolean; skinId?: SkinId }) {
-  const size = compact ? 74 : 164;
+function CreatureArt({
+  compact = false,
+  skinId = 'starter',
+  size: requestedSize,
+}: {
+  compact?: boolean;
+  skinId?: SkinId;
+  size?: number;
+}) {
+  const size = requestedSize ?? (compact ? 74 : 164);
   const skin = skins.find((item) => item.id === skinId) ?? skins[0];
+  if (skin.imageSource) {
+    return (
+      <View
+        style={[
+          styles.characterImageFrame,
+          {
+            width: size,
+            height: size,
+            borderRadius: size > 80 ? size / 2 : 12,
+            borderColor: skin.accent,
+          },
+        ]}
+      >
+        <Image source={skin.imageSource} style={styles.characterImage} resizeMode="cover" />
+      </View>
+    );
+  }
   return (
     <Svg width={size} height={size} viewBox="0 0 164 164">
       <G transform="rotate(-8 82 82)">
@@ -931,7 +993,13 @@ export default function GameScreen() {
                   </View>
                   <Text style={styles.skinName}>{skin.name}</Text>
                   <Text style={styles.skinCost}>
-                    {equipped ? 'مستخدم حالياً' : unlocked ? 'مفتوح' : `${skin.price} عملة`}
+                    {equipped
+                      ? 'مستخدم حالياً'
+                      : unlocked
+                        ? 'مفتوح'
+                        : skin.price === 0
+                          ? 'مجاني'
+                          : `${skin.price} A أشوس`}
                   </Text>
                   <Pressable
                     testID={`skin-${skin.id}`}
@@ -1121,7 +1189,7 @@ export default function GameScreen() {
             </View>
           )}
           <View style={[styles.player, { left: snapshot.x - cameraX, top: snapshot.y }]}>
-            <CreatureArt compact skinId={profile.equippedSkin} />
+            <CreatureArt size={36} skinId={profile.equippedSkin} />
           </View>
         </View>
 
@@ -1183,6 +1251,17 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.midnight,
+  },
+  characterImageFrame: {
+    borderWidth: 2,
+    overflow: 'hidden',
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  characterImage: {
+    width: '100%',
+    height: '100%',
   },
   menu: {
     flex: 1,
