@@ -30,7 +30,7 @@ import Svg, {
   Path,
 } from 'react-native-svg';
 import rawColors from '@/constants/colors';
-import { EnemyArt, type EnemyKind } from '../components/GameEntityArt';
+import { BossArt, EnemyArt, type BossKind, type EnemyKind } from '../components/GameEntityArt';
 
 const colors = rawColors.light;
 
@@ -96,6 +96,12 @@ type Boss = {
   width: number;
   height: number;
   health: number;
+  kind: BossKind;
+  name: string;
+  patrolRange: number;
+  speed: number;
+  phase: number;
+  bobHeight: number;
 };
 
 type GameSnapshot = {
@@ -242,20 +248,6 @@ function DoorArt() {
   );
 }
 
-function BossArt() {
-  return (
-    <Svg width="100%" height="100%" viewBox="0 0 120 100" preserveAspectRatio="none">
-      <Path d="M14 95L10 58L20 24L34 34L45 8L58 30L75 7L84 34L104 20L112 59L104 95Z" fill={colors.danger} stroke={colors.ink} strokeWidth="6" />
-      <Ellipse cx="43" cy="51" rx="11" ry="14" fill={colors.paper} stroke={colors.ink} strokeWidth="5" />
-      <Ellipse cx="80" cy="51" rx="11" ry="14" fill={colors.paper} stroke={colors.ink} strokeWidth="5" />
-      <Circle cx="46" cy="54" r="5" fill={colors.ink} />
-      <Circle cx="77" cy="54" r="5" fill={colors.ink} />
-      <Path d="M39 73L49 84L59 73L70 84L81 72" fill="none" stroke={colors.paper} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
-      <Path d="M23 91L19 99M99 91L103 99" stroke={colors.ink} strokeWidth="7" strokeLinecap="round" />
-    </Svg>
-  );
-}
-
 function TrapArt({ kind }: { kind: Hazard['kind'] }) {
   if (kind === 'blob') {
     return (
@@ -301,6 +293,19 @@ function MusicToggle({
 
 const MAX_STAGES = 500;
 const BOSS_INTERVAL = 50;
+
+const bossRoster: Array<{ kind: BossKind; name: string; patrolFactor: number; speed: number; bobHeight: number }> = [
+  { kind: 'ember', name: 'سيد الجمر', patrolFactor: 0.07, speed: 0.55, bobHeight: 0 },
+  { kind: 'bat', name: 'خفاش العاصفة', patrolFactor: 0.11, speed: 0.8, bobHeight: 9 },
+  { kind: 'thorn', name: 'القرن الشائك', patrolFactor: 0.08, speed: 0.65, bobHeight: 0 },
+  { kind: 'crystal', name: 'حارس البلور', patrolFactor: 0.09, speed: 0.48, bobHeight: 6 },
+  { kind: 'storm', name: 'ساحق الرعد', patrolFactor: 0.12, speed: 0.85, bobHeight: 5 },
+  { kind: 'mire', name: 'وحش المستنقع', patrolFactor: 0.07, speed: 0.58, bobHeight: 3 },
+  { kind: 'void', name: 'ملك الفراغ', patrolFactor: 0.13, speed: 0.78, bobHeight: 8 },
+  { kind: 'gear', name: 'المدمّر الحديدي', patrolFactor: 0.1, speed: 0.9, bobHeight: 0 },
+  { kind: 'sun', name: 'تنين الشمس', patrolFactor: 0.12, speed: 0.72, bobHeight: 7 },
+  { kind: 'final', name: 'الوحش الأخير', patrolFactor: 0.15, speed: 1.05, bobHeight: 12 },
+];
 
 const playerRanks = [
   { name: 'مبتدئ', start: 1, end: 24, color: colors.sky },
@@ -531,6 +536,7 @@ function makeLevel(width: number, height: number, stage: number) {
   const difficulty = Math.max(0, Math.min(1, (stage - 1) / (MAX_STAGES - 1)));
   const worldWidth = width * (7.4 + difficulty * 2.6);
   const bossTier = stage % BOSS_INTERVAL === 0 ? stage / BOSS_INTERVAL : 0;
+  const bossDefinition = bossTier > 0 ? bossRoster[bossTier - 1] : null;
   const bossHealth = bossTier > 0 ? bossTier + 2 : 0;
   const bossWidth = bossTier > 0
     ? Math.min(116 + (bossTier - 1) * 6, width * 0.42)
@@ -547,6 +553,12 @@ function makeLevel(width: number, height: number, stage: number) {
         width: bossWidth,
         height: 88,
         health: bossHealth,
+          kind: bossDefinition?.kind ?? 'ember',
+          name: bossDefinition?.name ?? 'سيد الجمر',
+          patrolRange: width * (bossDefinition?.patrolFactor ?? 0),
+          speed: (bossDefinition?.speed ?? 0) + Math.max(0, bossTier - 1) * 0.025,
+          phase: (stage * 0.17) % (Math.PI * 2),
+          bobHeight: bossDefinition?.bobHeight ?? 0,
       }
     : null;
   const goalX = worldWidth - width * 0.48;
@@ -693,6 +705,14 @@ function getEnemyPosition(enemy: Enemy, elapsedMs: number) {
   return {
     x: patrolCenter + Math.sin(phase) * patrolRadius,
     y: enemy.y + bob,
+  };
+}
+
+function getBossPosition(boss: Boss, elapsedMs: number) {
+  const phase = (elapsedMs / 1000) * boss.speed + boss.phase;
+  return {
+    x: boss.x + Math.sin(phase) * boss.patrolRange,
+    y: boss.y + Math.sin(phase * 1.35) * boss.bobHeight,
   };
 }
 
@@ -1007,20 +1027,21 @@ export default function GameScreen() {
 
       let bossCollision = false;
       if (level.boss && current.bossHealth > 0) {
+        const bossPosition = getBossPosition(level.boss, current.elapsed);
         const touchingBoss = overlaps(
           current.x + 4,
           current.y + 5,
           playerWidth - 8,
           playerHeight - 6,
-          level.boss.x,
-          level.boss.y,
+          bossPosition.x,
+          bossPosition.y,
           level.boss.width,
           level.boss.height,
         );
         if (touchingBoss) {
-          const stompedBoss = current.vy >= 0 && previousBottom <= level.boss.y + 16;
+          const stompedBoss = current.vy >= 0 && previousBottom <= bossPosition.y + 16;
           if (stompedBoss) {
-            current.y = level.boss.y - playerHeight;
+            current.y = bossPosition.y - playerHeight;
             current.vy = -355;
             current.grounded = false;
             current.bossHealth = Math.max(0, current.bossHealth - 1);
@@ -1223,7 +1244,7 @@ export default function GameScreen() {
             <Text style={styles.levelTitle}>
               {level.boss
                 ? snapshot.bossHealth > 0
-                  ? `بوس المرحلة ${Math.floor(stage / BOSS_INTERVAL)}`
+                  ? level.boss.name
                   : 'الباب انفتح'
                 : stageBackdropThemes[Math.floor((stage - 1) / BOSS_INTERVAL) % stageBackdropThemes.length].name}
             </Text>
@@ -1244,7 +1265,7 @@ export default function GameScreen() {
           <Text style={[styles.warning, { top: gameSize.height * 0.13 }]}>
             {level.boss
               ? snapshot.bossHealth > 0
-                ? `اضربه من فوق • باقي ${snapshot.bossHealth} ضربات`
+                ? `اقفز فوق ${level.boss.name} • باقي ${snapshot.bossHealth}`
                 : 'انفتح الباب! كمل للنهاية'
               : level.enemies.length > 0
                 ? 'اقفز فوق الوحوش • كل هزيمة = A'
@@ -1301,8 +1322,18 @@ export default function GameScreen() {
             )
           ))}
           {level.boss && snapshot.bossHealth > 0 && (
-            <View style={[styles.boss, { left: level.boss.x - cameraX, top: level.boss.y, width: level.boss.width, height: level.boss.height }]}>
-              <BossArt />
+            <View
+              style={[
+                styles.boss,
+                {
+                  left: getBossPosition(level.boss, snapshot.elapsed).x - cameraX,
+                  top: getBossPosition(level.boss, snapshot.elapsed).y,
+                  width: level.boss.width,
+                  height: level.boss.height,
+                },
+              ]}
+            >
+              <BossArt kind={level.boss.kind} />
               <View style={styles.bossHealthTrack}>
                 <View style={[styles.bossHealthFill, { width: `${(snapshot.bossHealth / level.boss.health) * 100}%` }]} />
               </View>
