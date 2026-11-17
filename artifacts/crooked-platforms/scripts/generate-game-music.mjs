@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const sampleRate = 22050;
-const beatsPerMinute = 136;
+const beatsPerMinute = 154;
 const beatSeconds = 60 / beatsPerMinute;
 const bars = 8;
 const beatsPerBar = 4;
@@ -50,14 +50,17 @@ function addSynthNote(startBeat, durationBeats, note, voice, volume) {
     let value = 0;
 
     if (voice === 'bass') {
-      value = waveAt(phase, 'triangle') * 0.72 + waveAt(phase, 'sine') * 0.28;
+      value = waveAt(phase, 'saw') * 0.38
+        + waveAt(phase, 'triangle') * 0.42
+        + waveAt(phase, 'sine') * 0.2;
     } else if (voice === 'pad') {
-      value = waveAt(phase, 'sine') * 0.72 + waveAt(phase, 'triangle') * 0.28;
+      value = waveAt(phase, 'sine') * 0.55 + waveAt(phase, 'triangle') * 0.45;
     } else {
-      value = waveAt(phase, 'square') * 0.58
-        + waveAt(phase, 'triangle') * 0.27
-        + waveAt(phase, 'sine') * 0.15;
-      value *= 0.9 + Math.sin(progress * Math.PI) * 0.1;
+      value = waveAt(phase, 'square') * 0.42
+        + waveAt(phase, 'saw') * 0.32
+        + waveAt(phase, 'triangle') * 0.18
+        + waveAt(phase, 'sine') * 0.08;
+      value *= 0.84 + Math.sin(progress * Math.PI) * 0.16;
     }
 
     samples[index] += value * envelope * volume;
@@ -121,18 +124,18 @@ function addRiser(startBeat, durationBeats) {
 }
 
 const progressions = [
-  { root: 38, chord: [62, 65, 69] },
-  { root: 34, chord: [58, 62, 65] },
-  { root: 41, chord: [60, 65, 69] },
-  { root: 36, chord: [60, 64, 67] },
+  { root: 40, chord: [64, 67, 71, 74] },
+  { root: 36, chord: [60, 64, 67, 71] },
+  { root: 38, chord: [62, 65, 69, 72] },
+  { root: 35, chord: [59, 62, 66, 69] },
 ];
 const melodyPhrases = [
-  [74, 77, 81, 79, 77, 74, 72, 69],
-  [72, 74, 77, 74, 72, 69, 65, -1],
-  [69, 72, 74, 77, 74, 72, 69, 67],
-  [65, 69, 72, 74, 72, 69, 65, -1],
+  [76, 79, 83, 81, 79, 76, 74, 71],
+  [72, 76, 79, 83, 81, 79, 76, 72],
+  [74, 77, 81, 84, 81, 79, 77, 74],
+  [71, 74, 78, 81, 79, 78, 74, 71],
 ];
-const arpeggioPattern = [0, 2, 1, 2, 0, 2, 1, 2];
+const arpeggioPattern = [0, 2, 3, 1, 2, 3, 1, 0];
 
 for (let bar = 0; bar < bars; bar += 1) {
   const startBeat = bar * beatsPerBar;
@@ -143,31 +146,32 @@ for (let bar = 0; bar < bars; bar += 1) {
   const phrase = melodyPhrases[phraseIndex];
 
   for (const chordNote of chord) {
-    addSynthNote(startBeat, beatsPerBar * 0.96, chordNote, 'pad', 0.045);
+    addSynthNote(startBeat, beatsPerBar * 0.96, chordNote, 'pad', 0.052);
   }
 
   for (let beat = 0; beat < beatsPerBar; beat += 1) {
     const bassNote = beat === 1 || beat === 3 ? root + 12 : root;
-    addSynthNote(startBeat + beat, 0.58, bassNote, 'bass', beat === 0 ? 0.24 : 0.18);
+    addSynthNote(startBeat + beat, 0.58, bassNote, 'bass', beat === 0 ? 0.26 : 0.2);
   }
 
   for (let eighth = 0; eighth < 8; eighth += 1) {
     const beat = startBeat + eighth * 0.5;
     const chordIndex = arpeggioPattern[(eighth + bar) % arpeggioPattern.length];
     const arpOctave = eighth % 4 === 3 ? 12 : 0;
-    addSynthNote(beat, 0.32, chord[chordIndex] + 12 + arpOctave, 'lead', 0.085);
+    addSynthNote(beat, 0.32, chord[chordIndex] + 12 + arpOctave, 'lead', 0.09);
 
     const melodyNote = phrase[(eighth + (bar % 2 ? 2 : 0)) % phrase.length];
     if (melodyNote > 0) {
-      addSynthNote(beat + 0.02, 0.38, melodyNote, 'lead', 0.13);
+      addSynthNote(beat + 0.02, 0.38, melodyNote, 'lead', 0.15);
     }
 
-    addHat(beat, eighth % 2 === 0 ? 0.075 : 0.052);
+    addHat(beat, eighth % 2 === 0 ? 0.09 : 0.064);
   }
 
-  for (const kickBeat of [0, 2]) addKick(startBeat + kickBeat);
-  addSnare(startBeat + 1, bar % 2 === 0 ? 0.21 : 0.17);
-  addSnare(startBeat + 3, bar % 2 === 0 ? 0.2 : 0.16);
+  const kickPattern = bar % 4 === 3 ? [0, 1.5, 2, 3, 3.5] : [0, 2, 3.5];
+  for (const kickBeat of kickPattern) addKick(startBeat + kickBeat, 0.44);
+  addSnare(startBeat + 1, bar % 2 === 0 ? 0.23 : 0.19);
+  addSnare(startBeat + 3, bar % 2 === 0 ? 0.22 : 0.18);
 
   if (bar === 3 || bar === 7) addRiser(startBeat + 3, 1);
 }
