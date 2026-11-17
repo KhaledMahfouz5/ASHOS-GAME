@@ -28,6 +28,7 @@ import Svg, {
   Ellipse,
   G,
   Path,
+  Rect,
 } from 'react-native-svg';
 import rawColors from '@/constants/colors';
 import { BossArt, EnemyArt, type BossKind, type EnemyKind } from '../components/GameEntityArt';
@@ -325,6 +326,7 @@ function getPlayerRank(stage: number) {
 
 type StageBackdropTheme = {
   name: string;
+  kind: 'street' | 'buildings' | 'space' | 'galaxy' | 'void';
   skyTop: string;
   skyBottom: string;
   skyAlt: string;
@@ -336,17 +338,19 @@ type StageBackdropTheme = {
 };
 
 const stageBackdropThemes: StageBackdropTheme[] = [
-  { name: 'حدائق الليمون', skyTop: colors.sky, skyBottom: colors.violet, skyAlt: colors.violetLight, distant: colors.violetLight, near: colors.violet, accent: colors.lime, alternate: colors.coral, orb: colors.gold },
-  { name: 'الكثبان المرجانية', skyTop: colors.coral, skyBottom: colors.violet, skyAlt: colors.gold, distant: colors.danger, near: colors.coral, accent: colors.gold, alternate: colors.paper, orb: colors.lime },
-  { name: 'جزر النجوم', skyTop: colors.midnight, skyBottom: colors.violet, skyAlt: colors.ink, distant: colors.violet, near: colors.ink, accent: colors.sky, alternate: colors.coral, orb: colors.gold },
-  { name: 'القمم الجليدية', skyTop: colors.paper, skyBottom: colors.sky, skyAlt: colors.violetLight, distant: colors.sky, near: colors.violetLight, accent: colors.violet, alternate: colors.lime, orb: colors.paper },
-  { name: 'حديقة اليشم', skyTop: colors.lime, skyBottom: colors.sky, skyAlt: colors.violetLight, distant: colors.sky, near: colors.violet, accent: colors.paper, alternate: colors.coral, orb: colors.gold },
-  { name: 'حافة الجمر', skyTop: colors.danger, skyBottom: colors.coral, skyAlt: colors.midnight, distant: colors.coral, near: colors.midnight, accent: colors.gold, alternate: colors.lime, orb: colors.paper },
-  { name: 'الكهف الملكي', skyTop: colors.violetLight, skyBottom: colors.violet, skyAlt: colors.midnight, distant: colors.midnight, near: colors.ink, accent: colors.coral, alternate: colors.gold, orb: colors.sky },
-  { name: 'بحر الغيوم', skyTop: colors.paper, skyBottom: colors.sky, skyAlt: colors.violet, distant: colors.sky, near: colors.violetLight, accent: colors.violet, alternate: colors.coral, orb: colors.gold },
-  { name: 'مدينة النيون', skyTop: colors.ink, skyBottom: colors.midnight, skyAlt: colors.violet, distant: colors.violet, near: colors.ink, accent: colors.lime, alternate: colors.sky, orb: colors.coral },
-  { name: 'الصدع الأخير', skyTop: colors.midnight, skyBottom: colors.danger, skyAlt: colors.violet, distant: colors.violet, near: colors.ink, accent: colors.gold, alternate: colors.lime, orb: colors.coral },
+  { name: 'شارع المدينة', kind: 'street', skyTop: colors.sky, skyBottom: colors.violet, skyAlt: colors.violetLight, distant: colors.violetLight, near: colors.ink, accent: colors.gold, alternate: colors.coral, orb: colors.paper },
+  { name: 'بين البنايات', kind: 'buildings', skyTop: colors.ink, skyBottom: colors.violet, skyAlt: colors.midnight, distant: colors.violet, near: colors.ink, accent: colors.lime, alternate: colors.sky, orb: colors.coral },
+  { name: 'الفضاء المفتوح', kind: 'space', skyTop: colors.midnight, skyBottom: colors.violet, skyAlt: colors.ink, distant: colors.violet, near: colors.ink, accent: colors.sky, alternate: colors.gold, orb: colors.coral },
+  { name: 'المجرة', kind: 'galaxy', skyTop: colors.violet, skyBottom: colors.ink, skyAlt: colors.midnight, distant: colors.violetLight, near: colors.midnight, accent: colors.coral, alternate: colors.sky, orb: colors.gold },
+  { name: 'الفراغ', kind: 'void', skyTop: colors.ink, skyBottom: colors.midnight, skyAlt: colors.danger, distant: colors.violet, near: colors.ink, accent: colors.gold, alternate: colors.coral, orb: colors.violetLight },
 ];
+
+function getBackdropThemeIndex(stage: number) {
+  return Math.min(
+    stageBackdropThemes.length - 1,
+    Math.floor(((stage - 1) * stageBackdropThemes.length) / MAX_STAGES),
+  );
+}
 
 const StageBackdrop = React.memo(function StageBackdrop({
   stage,
@@ -357,15 +361,13 @@ const StageBackdrop = React.memo(function StageBackdrop({
   width: number;
   height: number;
 }) {
-  const themeIndex = Math.floor((stage - 1) / BOSS_INTERVAL) % stageBackdropThemes.length;
+  const themeIndex = getBackdropThemeIndex(stage);
   const theme = stageBackdropThemes[themeIndex];
-  const stagePhase = Math.floor(((stage - 1) % BOSS_INTERVAL) / 10);
-  const stageSkyTops = [theme.skyTop, theme.skyAlt, theme.skyBottom, theme.skyAlt, theme.skyTop];
-  const stageSkyBottoms = [theme.skyBottom, theme.skyTop, theme.skyAlt, theme.skyBottom, theme.skyAlt];
+  const stagePhase = Math.floor(((stage - 1) % 100) / 20);
+  const skyTop = stagePhase % 2 === 0 ? theme.skyTop : theme.skyAlt;
+  const skyBottom = stagePhase % 2 === 0 ? theme.skyBottom : theme.skyTop;
   const isBossStage = stage % BOSS_INTERVAL === 0;
   const isFinalStage = stage === MAX_STAGES;
-  const skyTop = isFinalStage ? colors.ink : isBossStage ? colors.midnight : stageSkyTops[stagePhase];
-  const skyBottom = isFinalStage ? colors.midnight : isBossStage ? colors.violet : stageSkyBottoms[stagePhase];
   const accent = isFinalStage ? colors.gold : isBossStage ? colors.coral : stagePhase % 2 ? theme.alternate : theme.accent;
   const orb = isFinalStage ? colors.coral : isBossStage ? colors.danger : stagePhase % 3 === 1 ? theme.accent : theme.orb;
   const distant = isFinalStage ? colors.danger : isBossStage ? colors.violet : theme.distant;
@@ -412,26 +414,30 @@ const StageBackdrop = React.memo(function StageBackdrop({
     radius: 1 + random() * 2.4,
     opacity: 0.18 + random() * 0.38,
   }));
-  const peakCount = 6;
-  const peaks = Array.from({ length: peakCount + 1 }, (_, index) => ({
-    x: (index / peakCount) * width,
-    y: height * (0.59 + random() * 0.1),
-  }));
-  const ridgePath = [
-    `M 0 ${height}`,
-    `L 0 ${peaks[0].y}`,
-    ...peaks.slice(1).map((peak) => `L ${peak.x} ${peak.y}`),
-    `L ${width} ${height} Z`,
-  ].join(' ');
-  const duneY = height * (0.76 + random() * 0.035);
-  const duneLift = height * (0.035 + random() * 0.035);
-  const foregroundPath = [
-    `M 0 ${height}`,
-    `L 0 ${duneY}`,
-    `C ${width * 0.18} ${duneY - duneLift} ${width * 0.28} ${duneY + duneLift} ${width * 0.48} ${duneY}`,
-    `S ${width * 0.78} ${duneY - duneLift} ${width} ${duneY + duneLift * 0.25}`,
-    `L ${width} ${height} Z`,
-  ].join(' ');
+  const buildingCount = 12;
+  const buildings = Array.from({ length: buildingCount }, (_, index) => {
+    const cellWidth = width / buildingCount;
+    const buildingWidth = cellWidth * (0.72 + random() * 0.34);
+    const buildingX = index * cellWidth + (cellWidth - buildingWidth) / 2;
+    const heightRange = theme.kind === 'street' ? 0.2 + random() * 0.3 : 0.3 + random() * 0.35;
+    const buildingHeight = height * heightRange;
+    const buildingY = height * 0.82 - buildingHeight;
+    const columns = Math.max(2, Math.floor(buildingWidth / 15));
+    const rows = Math.max(2, Math.floor(buildingHeight / 23));
+    const windows = Array.from({ length: columns * rows }, (_, windowIndex) => {
+      const row = Math.floor(windowIndex / columns);
+      const column = windowIndex % columns;
+      return {
+        x: buildingX + 5 + column * ((buildingWidth - 10) / columns),
+        y: buildingY + 8 + row * ((buildingHeight - 12) / rows),
+        width: Math.max(2.5, Math.min(5, buildingWidth / (columns * 3.4))),
+        height: Math.max(3, Math.min(7, buildingHeight / (rows * 3.4))),
+        lit: random() > 0.38,
+        opacity: 0.2 + random() * 0.55,
+      };
+    });
+    return { x: buildingX, y: buildingY, width: buildingWidth, height: buildingHeight, windows };
+  });
   const orbX = width * (0.2 + random() * 0.58);
   const orbY = height * (0.2 + random() * 0.13);
   const orbRadius = Math.min(width, height) * (0.07 + random() * 0.025);
@@ -461,29 +467,131 @@ const StageBackdrop = React.memo(function StageBackdrop({
             opacity={particle.opacity}
           />
         ))}
-        <Ellipse
-          cx={orbX}
-          cy={orbY}
-          rx={orbRadius * 1.65}
-          ry={orbRadius * 0.4}
-          fill="none"
-          stroke={accent}
-          strokeWidth={2}
-          opacity={0.46}
-          transform={`rotate(-18 ${orbX} ${orbY})`}
-        />
-        <Path d={ridgePath} fill={distant} opacity={0.36} />
-        <Path d={foregroundPath} fill={near} opacity={0.32} />
-        {peaks.slice(1, -1).map((peak, index) => (
-          <Circle
-            key={`stage-${stage}-landmark-${index}`}
-            cx={peak.x}
-            cy={peak.y + height * (0.06 + random() * 0.03)}
-            r={3 + random() * 7}
-            fill={accent}
-            opacity={0.2}
-          />
+        {(theme.kind === 'street' || theme.kind === 'buildings') && buildings.map((building, index) => (
+          <G key={`stage-${stage}-building-${index}`}>
+            <Rect
+              x={building.x}
+              y={building.y}
+              width={building.width}
+              height={building.height}
+              fill={index % 2 === 0 ? distant : near}
+              stroke={colors.ink}
+              strokeWidth={2}
+              opacity={theme.kind === 'street' ? 0.78 : 0.9}
+            />
+            {building.windows.map((window, windowIndex) => (
+              <Rect
+                key={`stage-${stage}-building-${index}-window-${windowIndex}`}
+                x={window.x}
+                y={window.y}
+                width={window.width}
+                height={window.height}
+                rx={1}
+                fill={window.lit ? accent : theme.alternate}
+                opacity={window.lit ? window.opacity : 0.14}
+              />
+            ))}
+          </G>
         ))}
+        {theme.kind === 'street' && (
+          <>
+            <Path
+              d={`M0 ${height * 0.82} H${width}`}
+              stroke={accent}
+              strokeWidth={2}
+              opacity={0.74}
+            />
+            <Path
+              d={`M${width * 0.16} ${height * 0.81} V${height * 0.53} L${width * 0.2} ${height * 0.49} L${width * 0.24} ${height * 0.53} V${height * 0.81} M${width * 0.8} ${height * 0.81} V${height * 0.57} L${width * 0.84} ${height * 0.53} L${width * 0.88} ${height * 0.57} V${height * 0.81}`}
+              fill="none"
+              stroke={theme.alternate}
+              strokeWidth={3}
+              opacity={0.76}
+            />
+            <Path
+              d={`M0 ${height * 0.87} H${width} M${width * 0.1} ${height * 0.91} h${width * 0.14} M${width * 0.43} ${height * 0.91} h${width * 0.14} M${width * 0.76} ${height * 0.91} h${width * 0.14}`}
+              stroke={colors.paper}
+              strokeWidth={3}
+              opacity={0.45}
+            />
+          </>
+        )}
+        {theme.kind === 'space' && (
+          <>
+            <Circle cx={width * 0.76} cy={height * 0.29} r={orbRadius * 1.35} fill={orb} opacity={0.5} />
+            <Ellipse
+              cx={width * 0.76}
+              cy={height * 0.29}
+              rx={orbRadius * 1.95}
+              ry={orbRadius * 0.44}
+              fill="none"
+              stroke={accent}
+              strokeWidth={2}
+              opacity={0.7}
+              transform={`rotate(-18 ${width * 0.76} ${height * 0.29})`}
+            />
+            <Circle cx={width * 0.18} cy={height * 0.54} r={5} fill={theme.alternate} opacity={0.7} />
+            <Circle cx={width * 0.9} cy={height * 0.58} r={3} fill={colors.paper} opacity={0.6} />
+          </>
+        )}
+        {theme.kind === 'galaxy' && (
+          <>
+            <Ellipse
+              cx={width * 0.52}
+              cy={height * 0.4}
+              rx={width * 0.36}
+              ry={height * 0.12}
+              fill="none"
+              stroke={accent}
+              strokeWidth={8}
+              opacity={0.25}
+              transform={`rotate(-22 ${width * 0.52} ${height * 0.4})`}
+            />
+            <Path
+              d={`M${width * 0.1} ${height * 0.48} C${width * 0.3} ${height * 0.22}, ${width * 0.66} ${height * 0.64}, ${width * 0.88} ${height * 0.24} M${width * 0.15} ${height * 0.32} C${width * 0.35} ${height * 0.66}, ${width * 0.65} ${height * 0.18}, ${width * 0.92} ${height * 0.52}`}
+              fill="none"
+              stroke={theme.alternate}
+              strokeWidth={3}
+              opacity={0.48}
+            />
+            <Circle cx={width * 0.52} cy={height * 0.4} r={orbRadius * 0.62} fill={orb} opacity={0.56} />
+          </>
+        )}
+        {theme.kind === 'void' && (
+          <>
+            <Path
+              d={`M${width * 0.24} ${height * 0.27} C${width * 0.42} ${height * 0.13}, ${width * 0.68} ${height * 0.2}, ${width * 0.76} ${height * 0.41} C${width * 0.83} ${height * 0.64}, ${width * 0.56} ${height * 0.73}, ${width * 0.39} ${height * 0.57} C${width * 0.22} ${height * 0.42}, ${width * 0.35} ${height * 0.24}, ${width * 0.54} ${height * 0.29}`}
+              fill="none"
+              stroke={accent}
+              strokeWidth={5}
+              opacity={0.42}
+            />
+            <Ellipse
+              cx={width * 0.53}
+              cy={height * 0.42}
+              rx={width * 0.08}
+              ry={height * 0.16}
+              fill={colors.ink}
+              stroke={theme.alternate}
+              strokeWidth={2}
+              opacity={0.92}
+              transform={`rotate(24 ${width * 0.53} ${height * 0.42})`}
+            />
+          </>
+        )}
+        {(theme.kind === 'space' || theme.kind === 'galaxy' || theme.kind === 'void') && (
+          <Ellipse
+            cx={orbX}
+            cy={orbY}
+            rx={orbRadius * 1.65}
+            ry={orbRadius * 0.4}
+            fill="none"
+            stroke={accent}
+            strokeWidth={2}
+            opacity={0.46}
+            transform={`rotate(-18 ${orbX} ${orbY})`}
+          />
+        )}
       </Svg>
       <Animated.View
         style={[
@@ -566,7 +674,6 @@ function makeLevel(width: number, height: number, stage: number) {
   const obstacleCount = Math.min(18, 5 + Math.floor(difficulty * 13));
   const firstObstacleX = width * 0.88;
   const spacing = (lastObstacleX - firstObstacleX) / Math.max(1, obstacleCount);
-  const pits: Array<{ start: number; end: number }> = [];
   const hazards: Hazard[] = [];
   const enemies: Enemy[] = [];
   const coins: Coin[] = [];
@@ -578,10 +685,7 @@ function makeLevel(width: number, height: number, stage: number) {
     const obstacleX = baseX + (random() - 0.5) * spacing * 0.42;
     const obstacleChoice = random();
     const obstacleWidth = 42 + random() * (20 + difficulty * 30);
-    if (obstacleChoice < 0.2) {
-      const pitWidth = 42 + random() * (16 + difficulty * 28);
-      pits.push({ start: obstacleX, end: obstacleX + pitWidth });
-    } else {
+    if (obstacleChoice >= 0.2) {
       const kind = hazardPool[Math.floor(random() * hazardPool.length)];
       hazards.push({
         id: `stage-${stage}-hazard-${index}`,
@@ -616,14 +720,11 @@ function makeLevel(width: number, height: number, stage: number) {
         : (attempt % 2 === 1 ? 1 : -1) * Math.ceil(attempt / 2) * width * 0.16;
       const candidateX = baseX + offset;
       const insidePath = candidateX >= firstObstacleX && candidateX + enemyWidth < lastObstacleX;
-      const overlapsPit = pits.some((pit) =>
-        candidateX - patrolRadius < pit.end && candidateX + enemyWidth + patrolRadius > pit.start,
-      );
       const overlapsHazard = hazards.some((hazard) =>
         candidateX - patrolRadius < hazard.x + hazard.width + 20 &&
         candidateX + enemyWidth + patrolRadius > hazard.x - 20,
       );
-      if (insidePath && !overlapsPit && !overlapsHazard) {
+      if (insidePath && !overlapsHazard) {
         enemyX = candidateX;
         clearPosition = true;
         break;
@@ -645,32 +746,13 @@ function makeLevel(width: number, height: number, stage: number) {
       phase: random() * Math.PI * 2,
     });
   }
-  pits.sort((a, b) => a.start - b.start);
-  const platforms: PlatformPiece[] = [];
-  let cursor = 0;
-  pits.forEach((pit, index) => {
-    const pitStart = Math.max(cursor + 35, pit.start);
-    const pitEnd = Math.min(worldWidth - width * 0.7, pit.end);
-    if (pitStart > cursor + 18) {
-      platforms.push({
-        id: `stage-${stage}-track-${index}`,
-        x: cursor,
-        y: floorY,
-        width: pitStart - cursor,
-        height: 48,
-      });
-    }
-    cursor = Math.max(cursor, pitEnd);
-  });
-  if (cursor < worldWidth) {
-    platforms.push({
-      id: `stage-${stage}-track-finish`,
-      x: cursor,
-      y: floorY,
-      width: worldWidth - cursor,
-      height: 48,
-    });
-  }
+  const platforms: PlatformPiece[] = [{
+    id: `stage-${stage}-ground`,
+    x: 0,
+    y: floorY,
+    width: worldWidth,
+    height: 48,
+  }];
 
   return {
     platforms,
@@ -1178,9 +1260,9 @@ export default function GameScreen() {
           </View>
           <View style={styles.titleBlock}>
             <Text style={styles.title}>ASHOS{'\n'}GAME</Text>
-            <Text style={styles.subtitle}>لعبة منصّات ما بتصدّقها</Text>
+            <Text style={styles.subtitle}>مطاردة 2D على خط مستقيم</Text>
             <Text style={styles.description}>
-              اجمع العملات، اقفز فوق العوائق، وافتح سكنات جديدة بطريقك للمرحلة 500.
+              اركض، اقفز فوق العوائق، واجمع العملات بين شوارع المدينة والمجرة.
             </Text>
           </View>
           <View style={styles.statsRow}>
@@ -1246,7 +1328,7 @@ export default function GameScreen() {
                 ? snapshot.bossHealth > 0
                   ? level.boss.name
                   : 'الباب انفتح'
-                : stageBackdropThemes[Math.floor((stage - 1) / BOSS_INTERVAL) % stageBackdropThemes.length].name}
+                : stageBackdropThemes[getBackdropThemeIndex(stage)].name}
             </Text>
           </View>
           <View style={styles.timerPill}>
@@ -1285,6 +1367,7 @@ export default function GameScreen() {
                   top: platform.y,
                   width: platform.width,
                   height: platform.height,
+                  borderTopColor: stageBackdropThemes[getBackdropThemeIndex(stage)].accent,
                 },
               ]}
             />
@@ -1345,7 +1428,22 @@ export default function GameScreen() {
               <Text style={styles.doorLabel}>اهرب</Text>
             </View>
           )}
-          <View style={[styles.player, { left: snapshot.x - cameraX, top: snapshot.y }]}>
+          <View
+            style={[
+              styles.player,
+              {
+                left: snapshot.x - cameraX,
+                top: snapshot.y,
+                transform: snapshot.grounded && (controls.current.left || controls.current.right)
+                  ? [
+                      { translateY: -Math.abs(Math.sin(snapshot.elapsed / 48)) * 2 },
+                      { rotateZ: `${Math.sin(snapshot.elapsed / 48) * 4}deg` },
+                      { scaleX: controls.current.left ? -1 : 1 },
+                    ]
+                  : undefined,
+              },
+            ]}
+          >
             <CreatureArt size={36} skinId={profile.equippedSkin} />
           </View>
         </View>
@@ -1903,14 +2001,10 @@ const styles = StyleSheet.create({
   platform: {
     position: 'absolute',
     backgroundColor: colors.ink,
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: colors.ink,
-    shadowColor: colors.ink,
-    shadowOpacity: 0.25,
-    shadowRadius: 0,
-    shadowOffset: { width: 4, height: 5 },
-    elevation: 2,
+    borderRadius: 0,
+    borderWidth: 0,
+    borderTopWidth: 4,
+    borderTopColor: colors.lime,
   },
   hazard: {
     position: 'absolute',
