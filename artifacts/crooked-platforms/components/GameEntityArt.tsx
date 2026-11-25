@@ -1,4 +1,5 @@
 import React from 'react';
+import { Image } from 'react-native';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import rawColors from '@/constants/colors';
 
@@ -13,7 +14,9 @@ export type BossKind =
   | 'void'
   | 'gear'
   | 'sun'
-  | 'final';
+  | 'final'
+  | 'agent'
+  | 'soldier';
 
 const colors = rawColors.light;
 
@@ -66,9 +69,32 @@ const bossPalettes: Record<BossKind, { body: string; accent: string }> = {
   gear: { body: colors.coral, accent: colors.gold },
   sun: { body: colors.gold, accent: colors.coral },
   final: { body: colors.danger, accent: colors.gold },
+  agent: { body: colors.ink, accent: colors.sky },
+  soldier: { body: colors.midnight, accent: colors.coral },
 };
 
 export function BossArt({ kind }: { kind: BossKind }) {
+  if (kind === 'agent') {
+    return (
+      <Image
+        source={require('../assets/characters/secret-agent-boss.jpg')}
+        style={{ width: '100%', height: '100%', borderRadius: 12, borderWidth: 3, borderColor: colors.ink }}
+        resizeMode="cover"
+        accessibilityLabel="العميل السري"
+      />
+    );
+  }
+  if (kind === 'soldier') {
+    return (
+      <Image
+        source={require('../assets/characters/battlefield-boss.jpg')}
+        style={{ width: '100%', height: '100%', borderRadius: 12, borderWidth: 3, borderColor: colors.ink }}
+        resizeMode="cover"
+        accessibilityLabel="الجندي المدجّج"
+      />
+    );
+  }
+
   const palette = bossPalettes[kind];
   const bodyPath = kind === 'crystal'
     ? 'M12 94L16 53L31 17L46 40L60 5L76 41L96 13L108 53L104 94Z'

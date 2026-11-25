@@ -36,7 +36,7 @@ import { BossArt, EnemyArt, type BossKind, type EnemyKind } from '../components/
 const colors = rawColors.light;
 
 type Mode = 'menu' | 'wardrobe' | 'playing' | 'lost' | 'won';
-type SkinId = 'starter' | 'ember' | 'ocean' | 'royal' | 'sun' | 'ghost';
+type SkinId = 'starter' | 'ember' | 'ocean' | 'royal' | 'sun' | 'armor' | 'ghost';
 
 type SkinDefinition = {
   id: SkinId;
@@ -170,6 +170,7 @@ const skins: SkinDefinition[] = [
     accent: colors.coral,
     imageSource: require('../assets/characters/golden-rival.jpg'),
   },
+  { id: 'armor', name: 'درع النيون', price: 135, body: colors.midnight, accent: colors.sky, imageSource: require('../assets/characters/neon-armor-skin.jpg') },
   { id: 'ghost', name: 'الشبح', price: 160, body: colors.paper, accent: colors.sky },
 ];
 
@@ -304,9 +305,9 @@ const bossRoster: Array<{ kind: BossKind; name: string; patrolFactor: number; sp
   { kind: 'storm', name: 'ساحق الرعد', patrolFactor: 0.12, speed: 0.85, bobHeight: 5 },
   { kind: 'mire', name: 'وحش المستنقع', patrolFactor: 0.07, speed: 0.58, bobHeight: 3 },
   { kind: 'void', name: 'ملك الفراغ', patrolFactor: 0.13, speed: 0.78, bobHeight: 8 },
-  { kind: 'gear', name: 'المدمّر الحديدي', patrolFactor: 0.1, speed: 0.9, bobHeight: 0 },
+  { kind: 'agent', name: 'العميل السري', patrolFactor: 0.1, speed: 0.9, bobHeight: 0 },
   { kind: 'sun', name: 'تنين الشمس', patrolFactor: 0.12, speed: 0.72, bobHeight: 7 },
-  { kind: 'final', name: 'الوحش الأخير', patrolFactor: 0.15, speed: 1.05, bobHeight: 12 },
+  { kind: 'soldier', name: 'الجندي المدجّج', patrolFactor: 0.15, speed: 1.05, bobHeight: 0 },
 ];
 
 const playerRanks = [
