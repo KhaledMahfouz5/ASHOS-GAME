@@ -37,7 +37,7 @@ import { BossArt, EnemyArt, type BossKind, type EnemyKind } from '../components/
 const colors = rawColors.light;
 
 type Mode = 'menu' | 'wardrobe' | 'playing' | 'lost' | 'won';
-type SkinId = 'starter' | 'ember' | 'ocean' | 'royal' | 'sun' | 'armor' | 'ghost';
+type SkinId = 'starter' | 'ember' | 'ocean' | 'royal' | 'sun' | 'armor' | 'shadowCat' | 'ghost';
 
 type SkinDefinition = {
   id: SkinId;
@@ -46,6 +46,9 @@ type SkinDefinition = {
   body: string;
   accent: string;
   imageSource?: number;
+  evolvedImageSource?: number;
+  evolvesAfterStage?: number;
+  evolvedName?: string;
 };
 
 type PlayerProfile = {
@@ -180,6 +183,17 @@ const skins: SkinDefinition[] = [
     accent: colors.sky,
     imageSource: require('../assets/characters/neon-armor-skin.jpg'),
   },
+  {
+    id: 'shadowCat',
+    name: 'حارس النور والظل',
+    price: 180,
+    body: colors.midnight,
+    accent: colors.gold,
+    imageSource: require('../assets/characters/shadow-cat.jpg'),
+    evolvedImageSource: require('../assets/characters/shadow-tiger.jpg'),
+    evolvesAfterStage: 50,
+    evolvedName: 'نمر النور والظل',
+  },
   { id: 'ghost', name: 'الشبح', price: 160, body: colors.paper, accent: colors.sky },
 ];
 
@@ -196,14 +210,18 @@ function CreatureArt({
   compact = false,
   skinId = 'starter',
   size: requestedSize,
+  progressStage = 1,
 }: {
   compact?: boolean;
   skinId?: SkinId;
   size?: number;
+  progressStage?: number;
 }) {
   const size = requestedSize ?? (compact ? 74 : 164);
   const skin = skins.find((item) => item.id === skinId) ?? skins[0];
-  if (skin.imageSource) {
+  const hasEvolved = skin.evolvesAfterStage !== undefined && progressStage > skin.evolvesAfterStage;
+  const imageSource = hasEvolved ? skin.evolvedImageSource ?? skin.imageSource : skin.imageSource;
+  if (imageSource) {
     return (
       <View
         style={[
@@ -216,7 +234,7 @@ function CreatureArt({
           },
         ]}
       >
-        <Image source={skin.imageSource} style={styles.characterImage} resizeMode="cover" />
+        <Image source={imageSource} style={styles.characterImage} resizeMode="cover" />
       </View>
     );
   }
@@ -1273,9 +1291,12 @@ export default function GameScreen() {
               const unlocked = profile.unlockedSkins.includes(skin.id);
               const equipped = profile.equippedSkin === skin.id;
               return (
-                <View key={skin.id} style={styles.skinCard}>
+                <View
+                  key={skin.id}
+                  style={[styles.skinCard, skin.evolvesAfterStage !== undefined && styles.skinCardEvolving]}
+                >
                   <View style={[styles.skinPreview, { backgroundColor: skin.accent }]}>
-                    <CreatureArt compact skinId={skin.id} />
+                    <CreatureArt compact skinId={skin.id} progressStage={profile.unlockedStage} />
                   </View>
                   <Text style={styles.skinName}>{skin.name}</Text>
                   <Text style={styles.skinCost}>
@@ -1287,6 +1308,13 @@ export default function GameScreen() {
                           ? 'مجاني'
                           : `${skin.price} A أشوس`}
                   </Text>
+                  {skin.evolvesAfterStage !== undefined && (
+                    <Text style={styles.skinEvolution}>
+                      {profile.unlockedStage > skin.evolvesAfterStage
+                        ? `التطور مفتوح: ${skin.evolvedName ?? 'النمر'}`
+                        : `يتحول بعد بوس ${skin.evolvesAfterStage}`}
+                    </Text>
+                  )}
                   <Pressable
                     testID={`skin-${skin.id}`}
                     onPress={() => chooseSkin(skin)}
@@ -1333,7 +1361,7 @@ export default function GameScreen() {
           </View>
           <View style={styles.hero}>
             <View style={styles.heroHalo} />
-            <CreatureArt skinId={profile.equippedSkin} />
+            <CreatureArt skinId={profile.equippedSkin} progressStage={profile.unlockedStage} />
             <View style={[styles.heroSpark, styles.sparkOne]} />
             <View style={[styles.heroSpark, styles.sparkTwo]} />
           </View>
@@ -1541,7 +1569,7 @@ export default function GameScreen() {
               },
             ]}
           >
-            <CreatureArt size={36} skinId={profile.equippedSkin} />
+            <CreatureArt size={36} skinId={profile.equippedSkin} progressStage={profile.unlockedStage} />
           </View>
         </View>
 
@@ -1567,7 +1595,7 @@ export default function GameScreen() {
         <View style={styles.overlay}>
           <Animated.View style={[styles.resultCard, resultCardAnimation]}>
             <Animated.View style={[styles.resultCharacter, resultCharacterAnimation]}>
-              <CreatureArt compact skinId={profile.equippedSkin} />
+              <CreatureArt compact skinId={profile.equippedSkin} progressStage={profile.unlockedStage} />
             </Animated.View>
             <View style={styles.resultIcon}>{mode === 'won' ? <Text style={styles.resultIconText}>✓</Text> : <Text style={styles.resultIconText}>!</Text>}</View>
             <Text style={styles.resultKicker}>{mode === 'won' ? `خلصت المرحلة ${stage}` : `المحاولة انتهت في المرحلة ${stage}`}</Text>
@@ -1943,6 +1971,9 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     alignItems: 'center',
   },
+  skinCardEvolving: {
+    minHeight: 204,
+  },
   skinPreview: {
     width: 80,
     height: 80,
@@ -1965,6 +1996,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
+    writingDirection: 'rtl',
+  },
+  skinEvolution: {
+    color: colors.coral,
+    fontSize: 9,
+    fontWeight: '800',
+    marginTop: 2,
+    textAlign: 'center',
     writingDirection: 'rtl',
   },
   skinAction: {
