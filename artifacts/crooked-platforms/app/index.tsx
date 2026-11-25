@@ -69,6 +69,7 @@ type Hazard = {
   width: number;
   height: number;
   kind: 'teeth' | 'blob';
+  spawnedAt?: number;
 };
 
 type Enemy = {
@@ -809,6 +810,7 @@ export default function GameScreen() {
   const [profile, setProfile] = useState<PlayerProfile>(defaultProfile);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [snapshot, setSnapshot] = useState<GameSnapshot>(initialSnapshot);
+  const [spawnedHazards, setSpawnedHazards] = useState<Hazard[]>([]);
   const [gameSize, setGameSize] = useState({
     width: Math.min(window.width, 430),
     height: Math.max(540, window.height - insets.top - insets.bottom - 20),
@@ -818,6 +820,8 @@ export default function GameScreen() {
   const runtime = useRef<GameRuntime>({ ...initialSnapshot, vx: 0, lastTime: 0 });
   const controls = useRef({ left: false, right: false, jump: false });
   const profileRef = useRef<PlayerProfile>(defaultProfile);
+  const spawnedHazardsRef = useRef<Hazard[]>([]);
+  const nextHazardIndex = useRef(0);
   const collectedCoins = useRef<Set<string>>(new Set());
   const defeatedEnemies = useRef<Set<string>>(new Set());
   const animation = useRef<number | null>(null);
@@ -933,6 +937,9 @@ export default function GameScreen() {
       bossHealth: nextLevel.boss?.health ?? 0,
     };
     runtime.current = { ...next, vx: 0, lastTime: 0 };
+    spawnedHazardsRef.current = [];
+    nextHazardIndex.current = 0;
+    setSpawnedHazards([]);
     setSnapshot(next);
   }, [gameSize.height, gameSize.width]);
 
@@ -1065,6 +1072,19 @@ export default function GameScreen() {
         }
       }
 
+      let didSpawnHazard = false;
+      const spawnAheadDistance = gameSize.width * 0.68;
+      while (
+        nextHazardIndex.current < level.hazards.length &&
+        level.hazards[nextHazardIndex.current].x <= current.x + spawnAheadDistance
+      ) {
+        const hazard = level.hazards[nextHazardIndex.current];
+        spawnedHazardsRef.current.push({ ...hazard, spawnedAt: current.elapsed });
+        nextHazardIndex.current += 1;
+        didSpawnHazard = true;
+      }
+      if (didSpawnHazard) setSpawnedHazards([...spawnedHazardsRef.current]);
+
       for (const coin of level.coins) {
         if (
           !collectedCoins.current.has(coin.id) &&
@@ -1134,7 +1154,7 @@ export default function GameScreen() {
         }
       }
 
-      const hitHazard = level.hazards.some((hazard) =>
+      const hitHazard = spawnedHazardsRef.current.some((hazard) =>
         overlaps(current.x + 4, current.y + 5, playerWidth - 8, playerHeight - 6, hazard.x, hazard.y + 7, hazard.width, hazard.height - 7),
       );
       const fell = current.y > gameSize.height + 40;
@@ -1350,8 +1370,8 @@ export default function GameScreen() {
                 ? `اقفز فوق ${level.boss.name} • باقي ${snapshot.bossHealth}`
                 : 'انفتح الباب! كمل للنهاية'
               : level.enemies.length > 0
-                ? 'اقفز فوق الوحوش • كل هزيمة = A'
-                : 'طريق مستقيم... بس العوائق عشوائية'}
+                ? 'اقفز فوق الوحوش • انتبه للعوائق الجديدة'
+                : 'انتبه، عوائق جديدة عم تظهر مع تقدمك'}
           </Text>
           <View style={styles.inGameWallet}>
             <Text style={styles.walletGlyph}>A</Text>
@@ -1392,11 +1412,29 @@ export default function GameScreen() {
               </View>
             );
           })}
-          {level.hazards.map((hazard) => (
-            <View key={hazard.id} style={[styles.hazard, { left: hazard.x - cameraX, top: hazard.y, width: hazard.width, height: hazard.height }]}>
-              <TrapArt kind={hazard.kind} />
-            </View>
-          ))}
+          {spawnedHazards.map((hazard) => {
+            const revealProgress = hazard.spawnedAt === undefined
+              ? 1
+              : Math.min(1, Math.max(0, (snapshot.elapsed - hazard.spawnedAt) / 220));
+            return (
+              <View
+                key={hazard.id}
+                style={[
+                  styles.hazard,
+                  {
+                    left: hazard.x - cameraX,
+                    top: hazard.y + (1 - revealProgress) * 14,
+                    width: hazard.width,
+                    height: hazard.height,
+                    opacity: revealProgress,
+                    transform: [{ scale: 0.76 + revealProgress * 0.24 }],
+                  },
+                ]}
+              >
+                <TrapArt kind={hazard.kind} />
+              </View>
+            );
+          })}
           {level.coins.map((coin) => (
             !collectedCoins.current.has(coin.id) && (
               <View key={coin.id} style={[styles.coin, { left: coin.x - cameraX, top: coin.y }]}>
