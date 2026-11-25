@@ -4,6 +4,7 @@ import {
   Dimensions,
   Image,
   Pressable,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -118,6 +119,7 @@ type GameSnapshot = {
 type GameRuntime = GameSnapshot & {
   vx: number;
   lastTime: number;
+  jumpsRemaining: number;
 };
 
 const initialSnapshot: GameSnapshot = {
@@ -170,7 +172,14 @@ const skins: SkinDefinition[] = [
     accent: colors.coral,
     imageSource: require('../assets/characters/golden-rival.jpg'),
   },
-  { id: 'armor', name: 'درع النيون', price: 135, body: colors.midnight, accent: colors.sky, imageSource: require('../assets/characters/neon-armor-skin.jpg') },
+  {
+    id: 'armor',
+    name: 'درع النيون',
+    price: 135,
+    body: colors.midnight,
+    accent: colors.sky,
+    imageSource: require('../assets/characters/neon-armor-skin.jpg'),
+  },
   { id: 'ghost', name: 'الشبح', price: 160, body: colors.paper, accent: colors.sky },
 ];
 
@@ -818,7 +827,7 @@ export default function GameScreen() {
   });
   const resultEntrance = useSharedValue(0);
   const resultWiggle = useSharedValue(0);
-  const runtime = useRef<GameRuntime>({ ...initialSnapshot, vx: 0, lastTime: 0 });
+  const runtime = useRef<GameRuntime>({ ...initialSnapshot, vx: 0, lastTime: 0, jumpsRemaining: 2 });
   const controls = useRef({ left: false, right: false, jump: false });
   const profileRef = useRef<PlayerProfile>(defaultProfile);
   const spawnedHazardsRef = useRef<Hazard[]>([]);
@@ -925,6 +934,46 @@ export default function GameScreen() {
     setGameSize({ width, height });
   }, [insets.bottom, insets.top, window.height, window.width]);
 
+  useEffect(() => {
+    if (Platform.OS !== 'web' || mode !== 'playing') return;
+    const browserWindow = globalThis.window;
+    if (!browserWindow) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (!['a', 'd', 'w', 'arrowleft', 'arrowright', 'arrowup', ' '].includes(key)) return;
+      event.preventDefault();
+      if (key === 'a' || key === 'arrowleft') controls.current.left = true;
+      if (key === 'd' || key === 'arrowright') controls.current.right = true;
+      if (!event.repeat && (key === 'w' || key === 'arrowup' || key === ' ')) {
+        controls.current.jump = true;
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (key === 'a' || key === 'arrowleft') controls.current.left = false;
+      if (key === 'd' || key === 'arrowright') controls.current.right = false;
+    };
+
+    const clearControls = () => {
+      controls.current.left = false;
+      controls.current.right = false;
+      controls.current.jump = false;
+    };
+
+    browserWindow.addEventListener('keydown', handleKeyDown);
+    browserWindow.addEventListener('keyup', handleKeyUp);
+    browserWindow.addEventListener('blur', clearControls);
+    return () => {
+      browserWindow.removeEventListener('keydown', handleKeyDown);
+      browserWindow.removeEventListener('keyup', handleKeyUp);
+      browserWindow.removeEventListener('blur', clearControls);
+      clearControls();
+    };
+  }, [mode]);
+
   const level = useMemo(
     () => makeLevel(gameSize.width, gameSize.height, stage),
     [gameSize.height, gameSize.width, stage],
@@ -937,7 +986,7 @@ export default function GameScreen() {
       y: nextLevel.platforms[0].y - 36,
       bossHealth: nextLevel.boss?.health ?? 0,
     };
-    runtime.current = { ...next, vx: 0, lastTime: 0 };
+    runtime.current = { ...next, vx: 0, lastTime: 0, jumpsRemaining: 2 };
     spawnedHazardsRef.current = [];
     nextHazardIndex.current = 0;
     setSpawnedHazards([]);
@@ -1048,11 +1097,17 @@ export default function GameScreen() {
       const direction = (controls.current.right ? 1 : 0) - (controls.current.left ? 1 : 0);
       current.vx = direction * moveSpeed;
       current.x = Math.max(0, Math.min(level.worldWidth - playerWidth, current.x + current.vx * delta));
-      if (controls.current.jump && current.grounded) {
-        current.vy = -450;
-        current.grounded = false;
+      if (controls.current.jump) {
+        if (current.jumpsRemaining > 0) {
+          const isSecondJump = current.jumpsRemaining === 1;
+          current.vy = isSecondJump ? -410 : -450;
+          current.grounded = false;
+          current.jumpsRemaining -= 1;
+          void Haptics.impactAsync(
+            isSecondJump ? Haptics.ImpactFeedbackStyle.Heavy : Haptics.ImpactFeedbackStyle.Light,
+          );
+        }
         controls.current.jump = false;
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
       const previousBottom = current.y + playerHeight;
       current.vy += 1100 * delta;
@@ -1070,6 +1125,7 @@ export default function GameScreen() {
           current.y = platform.y - playerHeight;
           current.vy = 0;
           current.grounded = true;
+          current.jumpsRemaining = 2;
         }
       }
 
@@ -1118,6 +1174,7 @@ export default function GameScreen() {
           current.y = enemyPosition.y - playerHeight;
           current.vy = -330;
           current.grounded = false;
+          current.jumpsRemaining = 1;
           defeatedEnemies.current.add(enemy.id);
           const currentProfile = profileRef.current;
           saveProfile({ ...currentProfile, coins: currentProfile.coins + 1 });
@@ -1147,6 +1204,7 @@ export default function GameScreen() {
             current.y = bossPosition.y - playerHeight;
             current.vy = -355;
             current.grounded = false;
+            current.jumpsRemaining = 1;
             current.bossHealth = Math.max(0, current.bossHealth - 1);
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           } else {
@@ -1491,14 +1549,17 @@ export default function GameScreen() {
           <View style={styles.directionGroup}>
             <Pressable testID="move-left" {...hold('left')} style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}>
               <Text style={styles.controlArrow}>‹</Text>
+              <Text style={styles.controlKey}>A</Text>
             </Pressable>
             <Pressable testID="move-right" {...hold('right')} style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}>
               <Text style={styles.controlArrow}>›</Text>
+              <Text style={styles.controlKey}>D</Text>
             </Pressable>
           </View>
           <Pressable testID="jump" onPressIn={jump} style={({ pressed }) => [styles.jumpButton, pressed && styles.controlPressed]}>
             <Text style={styles.jumpGlyph}>↑</Text>
-            <Text style={styles.jumpText}>نط</Text>
+            <Text style={styles.jumpText}>قفز مزدوج</Text>
+            <Text style={styles.jumpKey}>W</Text>
           </Pressable>
         </View>
       </LinearGradient>
@@ -2147,8 +2208,17 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     marginTop: -3,
   },
+  controlKey: {
+    position: 'absolute',
+    top: 3,
+    left: 7,
+    color: colors.paper,
+    fontSize: 9,
+    fontWeight: '900',
+    opacity: 0.8,
+  },
   jumpButton: {
-    width: 78,
+    width: 88,
     height: 58,
     borderRadius: 19,
     backgroundColor: colors.lime,
@@ -2165,9 +2235,18 @@ const styles = StyleSheet.create({
   },
   jumpText: {
     color: colors.ink,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     writingDirection: 'rtl',
+  },
+  jumpKey: {
+    position: 'absolute',
+    top: 4,
+    right: 9,
+    color: colors.ink,
+    fontSize: 9,
+    fontWeight: '900',
+    opacity: 0.72,
   },
   overlay: {
     ...StyleSheet.absoluteFill,
