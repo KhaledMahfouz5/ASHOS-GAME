@@ -16,7 +16,8 @@ export type BossKind =
   | 'sun'
   | 'final'
   | 'agent'
-  | 'soldier';
+  | 'soldier'
+  | 'chaosRobot';
 
 const colors = rawColors.light;
 
@@ -71,9 +72,10 @@ const bossPalettes: Record<BossKind, { body: string; accent: string }> = {
   final: { body: colors.danger, accent: colors.gold },
   agent: { body: colors.ink, accent: colors.sky },
   soldier: { body: colors.midnight, accent: colors.coral },
+  chaosRobot: { body: colors.midnight, accent: colors.violetLight },
 };
 
-export function BossArt({ kind }: { kind: BossKind }) {
+export function BossArt({ kind, evolved = false }: { kind: BossKind; evolved?: boolean }) {
   if (kind === 'agent') {
     return (
       <Image
@@ -91,6 +93,26 @@ export function BossArt({ kind }: { kind: BossKind }) {
         style={{ width: '100%', height: '100%', borderRadius: 12, borderWidth: 3, borderColor: colors.ink }}
         resizeMode="cover"
         accessibilityLabel="الجندي المدجّج"
+      />
+    );
+  }
+  if (kind === 'chaosRobot') {
+    return (
+      <Image
+        source={
+          evolved
+            ? require('../assets/characters/chaos-robot-evolved.jpg')
+            : require('../assets/characters/chaos-robot-boss.jpg')
+        }
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: 12,
+          borderWidth: 3,
+          borderColor: evolved ? colors.violetLight : colors.ink,
+        }}
+        resizeMode="cover"
+        accessibilityLabel={evolved ? 'روبوت الفوضى المتطور' : 'روبوت الفوضى'}
       />
     );
   }

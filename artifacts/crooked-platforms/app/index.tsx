@@ -105,6 +105,7 @@ type Boss = {
   health: number;
   kind: BossKind;
   name: string;
+  evolvedName?: string;
   patrolRange: number;
   speed: number;
   phase: number;
@@ -446,7 +447,7 @@ function MusicToggle({
 const MAX_STAGES = 500;
 const BOSS_INTERVAL = 50;
 
-const bossRoster: Array<{ kind: BossKind; name: string; patrolFactor: number; speed: number; bobHeight: number }> = [
+const bossRoster: Array<{ kind: BossKind; name: string; evolvedName?: string; patrolFactor: number; speed: number; bobHeight: number }> = [
   { kind: 'ember', name: 'سيد الجمر', patrolFactor: 0.07, speed: 0.55, bobHeight: 0 },
   { kind: 'bat', name: 'خفاش العاصفة', patrolFactor: 0.11, speed: 0.8, bobHeight: 9 },
   { kind: 'thorn', name: 'القرن الشائك', patrolFactor: 0.08, speed: 0.65, bobHeight: 0 },
@@ -455,7 +456,14 @@ const bossRoster: Array<{ kind: BossKind; name: string; patrolFactor: number; sp
   { kind: 'mire', name: 'وحش المستنقع', patrolFactor: 0.07, speed: 0.58, bobHeight: 3 },
   { kind: 'void', name: 'ملك الفراغ', patrolFactor: 0.13, speed: 0.78, bobHeight: 8 },
   { kind: 'agent', name: 'العميل السري', patrolFactor: 0.1, speed: 0.9, bobHeight: 0 },
-  { kind: 'sun', name: 'تنين الشمس', patrolFactor: 0.12, speed: 0.72, bobHeight: 7 },
+  {
+    kind: 'chaosRobot',
+    name: 'روبوت الفوضى',
+    evolvedName: 'حاكم الفوضى المطلق',
+    patrolFactor: 0.06,
+    speed: 0.72,
+    bobHeight: 7,
+  },
   { kind: 'soldier', name: 'الجندي المدجّج', patrolFactor: 0.15, speed: 1.05, bobHeight: 0 },
 ];
 
@@ -680,6 +688,7 @@ function makeLevel(width: number, height: number, stage: number) {
         health: bossHealth,
           kind: bossDefinition?.kind ?? 'ember',
           name: bossDefinition?.name ?? 'سيد الجمر',
+          evolvedName: bossDefinition?.evolvedName,
           patrolRange: width * (bossDefinition?.patrolFactor ?? 0),
           speed: (bossDefinition?.speed ?? 0) + Math.max(0, bossTier - 1) * 0.025,
           phase: (stage * 0.17) % (Math.PI * 2),
@@ -1408,6 +1417,12 @@ export default function GameScreen() {
   }
 
   const cameraX = Math.max(0, Math.min(level.worldWidth - gameSize.width, snapshot.x - gameSize.width * 0.28));
+  const bossEvolved = Boolean(
+    level.boss?.evolvedName &&
+    snapshot.bossHealth > 0 &&
+    snapshot.bossHealth * 2 <= level.boss.health,
+  );
+  const activeBossName = bossEvolved ? level.boss?.evolvedName : level.boss?.name;
 
   return (
     <View style={styles.root}>
@@ -1421,7 +1436,7 @@ export default function GameScreen() {
             <Text style={styles.levelTitle}>
               {level.boss
                 ? snapshot.bossHealth > 0
-                  ? level.boss.name
+                  ? activeBossName
                   : 'الباب انفتح'
                 : stageBackdropThemes[getBackdropThemeIndex(stage)].name}
             </Text>
@@ -1442,7 +1457,7 @@ export default function GameScreen() {
           <Text style={[styles.warning, { top: gameSize.height * 0.13 }]}>
             {level.boss
               ? snapshot.bossHealth > 0
-                ? `اقفز فوق ${level.boss.name} • باقي ${snapshot.bossHealth}`
+                ? `اقفز فوق ${activeBossName} • باقي ${snapshot.bossHealth}`
                 : 'انفتح الباب! كمل للنهاية'
               : level.enemies.length > 0
                 ? 'اقفز فوق الوحوش • انتبه للعوائق الجديدة'
@@ -1529,7 +1544,7 @@ export default function GameScreen() {
                 },
               ]}
             >
-              <BossArt kind={level.boss.kind} />
+              <BossArt kind={level.boss.kind} evolved={bossEvolved} />
               <View style={styles.bossHealthTrack}>
                 <View style={[styles.bossHealthFill, { width: `${(snapshot.bossHealth / level.boss.health) * 100}%` }]} />
               </View>
