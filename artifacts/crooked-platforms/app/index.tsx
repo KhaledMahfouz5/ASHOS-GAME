@@ -385,23 +385,42 @@ function getPlayerRank(stage: number) {
 
 type StageBackdropTheme = {
   name: string;
-  kind: 'street' | 'buildings' | 'space' | 'galaxy' | 'void';
-  skyTop: string;
-  skyBottom: string;
-  skyAlt: string;
-  distant: string;
-  near: string;
+  imageSource: number;
   accent: string;
   alternate: string;
-  orb: string;
 };
 
 const stageBackdropThemes: StageBackdropTheme[] = [
-  { name: 'شارع المدينة', kind: 'street', skyTop: colors.sky, skyBottom: colors.violet, skyAlt: colors.violetLight, distant: colors.violetLight, near: colors.ink, accent: colors.gold, alternate: colors.coral, orb: colors.paper },
-  { name: 'بين البنايات', kind: 'buildings', skyTop: colors.ink, skyBottom: colors.violet, skyAlt: colors.midnight, distant: colors.violet, near: colors.ink, accent: colors.lime, alternate: colors.sky, orb: colors.coral },
-  { name: 'الفضاء المفتوح', kind: 'space', skyTop: colors.midnight, skyBottom: colors.violet, skyAlt: colors.ink, distant: colors.violet, near: colors.ink, accent: colors.sky, alternate: colors.gold, orb: colors.coral },
-  { name: 'المجرة', kind: 'galaxy', skyTop: colors.violet, skyBottom: colors.ink, skyAlt: colors.midnight, distant: colors.violetLight, near: colors.midnight, accent: colors.coral, alternate: colors.sky, orb: colors.gold },
-  { name: 'الفراغ', kind: 'void', skyTop: colors.ink, skyBottom: colors.midnight, skyAlt: colors.danger, distant: colors.violet, near: colors.ink, accent: colors.gold, alternate: colors.coral, orb: colors.violetLight },
+  {
+    name: 'شارع المدينة',
+    imageSource: require('../assets/backgrounds/street-realistic.jpg'),
+    accent: colors.gold,
+    alternate: colors.coral,
+  },
+  {
+    name: 'بين البنايات',
+    imageSource: require('../assets/backgrounds/buildings-realistic.jpg'),
+    accent: colors.lime,
+    alternate: colors.sky,
+  },
+  {
+    name: 'الفضاء المفتوح',
+    imageSource: require('../assets/backgrounds/space-realistic.jpg'),
+    accent: colors.sky,
+    alternate: colors.gold,
+  },
+  {
+    name: 'المجرة',
+    imageSource: require('../assets/backgrounds/galaxy-realistic.jpg'),
+    accent: colors.coral,
+    alternate: colors.sky,
+  },
+  {
+    name: 'الفراغ',
+    imageSource: require('../assets/backgrounds/void-realistic.jpg'),
+    accent: colors.gold,
+    alternate: colors.coral,
+  },
 ];
 
 function getBackdropThemeIndex(stage: number) {
@@ -423,39 +442,53 @@ const StageBackdrop = React.memo(function StageBackdrop({
   const themeIndex = getBackdropThemeIndex(stage);
   const theme = stageBackdropThemes[themeIndex];
   const stagePhase = Math.floor(((stage - 1) % 100) / 20);
-  const skyTop = stagePhase % 2 === 0 ? theme.skyTop : theme.skyAlt;
-  const skyBottom = stagePhase % 2 === 0 ? theme.skyBottom : theme.skyTop;
   const isBossStage = stage % BOSS_INTERVAL === 0;
   const isFinalStage = stage === MAX_STAGES;
   const accent = isFinalStage ? colors.gold : isBossStage ? colors.coral : stagePhase % 2 ? theme.alternate : theme.accent;
-  const orb = isFinalStage ? colors.coral : isBossStage ? colors.danger : stagePhase % 3 === 1 ? theme.accent : theme.orb;
-  const distant = isFinalStage ? colors.danger : isBossStage ? colors.violet : theme.distant;
-  const near = isFinalStage || isBossStage ? colors.ink : theme.near;
   const pulse = useSharedValue(0);
+  const backgroundPan = useSharedValue(0);
   const cometTravel = useSharedValue(0);
-  const pulseRange = isBossStage ? 0.3 : 0.12;
   const pulseDuration = isFinalStage ? 360 : isBossStage ? 560 : 1450;
   const cometDuration = isFinalStage ? 820 : isBossStage ? 1250 : 3000;
 
   useEffect(() => {
+    backgroundPan.value = withRepeat(
+      withTiming(1, { duration: 15000, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
     pulse.value = withRepeat(
       withTiming(1, { duration: pulseDuration, easing: Easing.inOut(Easing.ease) }),
       -1,
       true,
     );
-    cometTravel.value = withRepeat(
-      withTiming(width + 184, { duration: cometDuration, easing: Easing.linear }),
-      -1,
-      false,
-    );
-  }, [cometDuration, cometTravel, pulse, pulseDuration, width]);
+    if (isBossStage) {
+      cometTravel.value = withRepeat(
+        withTiming(width + 184, { duration: cometDuration, easing: Easing.linear }),
+        -1,
+        false,
+      );
+    } else {
+      cometTravel.value = 0;
+    }
+    return () => {
+      cancelAnimation(backgroundPan);
+      cancelAnimation(pulse);
+      cancelAnimation(cometTravel);
+    };
+  }, [backgroundPan, cometDuration, cometTravel, isBossStage, pulse, pulseDuration, width]);
 
-  const orbPulseStyle = useAnimatedStyle(() => ({
-    opacity: 0.68 + pulse.value * 0.28,
-    transform: [{ scale: 1 + pulse.value * pulseRange }],
+  const backgroundMotionStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: 1.06 },
+      { translateX: (backgroundPan.value - 0.5) * 16 },
+    ],
+  }));
+  const bossTintStyle = useAnimatedStyle(() => ({
+    opacity: 0.025 + pulse.value * 0.075,
   }));
   const cometStyle = useAnimatedStyle(() => ({
-    opacity: 0.42 + pulse.value * 0.45,
+    opacity: 0.1 + pulse.value * 0.18,
     transform: [{ translateX: cometTravel.value }, { rotateZ: '-18deg' }],
   }));
 
@@ -470,45 +503,30 @@ const StageBackdrop = React.memo(function StageBackdrop({
     id: `stage-${stage}-particle-${index}`,
     x: random() * width,
     y: random() * height * 0.56,
-    radius: 1 + random() * 2.4,
-    opacity: 0.18 + random() * 0.38,
+    radius: 1 + random() * 1.8,
+    opacity: 0.12 + random() * 0.2,
   }));
-  const buildingCount = 12;
-  const buildings = Array.from({ length: buildingCount }, (_, index) => {
-    const cellWidth = width / buildingCount;
-    const buildingWidth = cellWidth * (0.72 + random() * 0.34);
-    const buildingX = index * cellWidth + (cellWidth - buildingWidth) / 2;
-    const heightRange = theme.kind === 'street' ? 0.2 + random() * 0.3 : 0.3 + random() * 0.35;
-    const buildingHeight = height * heightRange;
-    const buildingY = height * 0.82 - buildingHeight;
-    const columns = Math.max(2, Math.floor(buildingWidth / 15));
-    const rows = Math.max(2, Math.floor(buildingHeight / 23));
-    const windows = Array.from({ length: columns * rows }, (_, windowIndex) => {
-      const row = Math.floor(windowIndex / columns);
-      const column = windowIndex % columns;
-      return {
-        x: buildingX + 5 + column * ((buildingWidth - 10) / columns),
-        y: buildingY + 8 + row * ((buildingHeight - 12) / rows),
-        width: Math.max(2.5, Math.min(5, buildingWidth / (columns * 3.4))),
-        height: Math.max(3, Math.min(7, buildingHeight / (rows * 3.4))),
-        lit: random() > 0.38,
-        opacity: 0.2 + random() * 0.55,
-      };
-    });
-    return { x: buildingX, y: buildingY, width: buildingWidth, height: buildingHeight, windows };
-  });
-  const orbX = width * (0.2 + random() * 0.58);
-  const orbY = height * (0.2 + random() * 0.13);
-  const orbRadius = Math.min(width, height) * (0.07 + random() * 0.025);
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Animated.View style={[StyleSheet.absoluteFill, backgroundMotionStyle]}>
+        <Image source={theme.imageSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      </Animated.View>
+      <View style={[StyleSheet.absoluteFill, styles.backdropShade]} />
       <LinearGradient
-        colors={[skyTop, skyBottom]}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 0.8, y: 1 }}
+        colors={['transparent', 'transparent', colors.midnight]}
+        locations={[0, 0.7, 1]}
         style={StyleSheet.absoluteFill}
       />
+      {isBossStage && (
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: accent },
+            bossTintStyle,
+          ]}
+        />
+      )}
       <Svg
         width="100%"
         height="100%"
@@ -526,169 +544,17 @@ const StageBackdrop = React.memo(function StageBackdrop({
             opacity={particle.opacity}
           />
         ))}
-        {(theme.kind === 'street' || theme.kind === 'buildings') && buildings.map((building, index) => (
-          <G key={`stage-${stage}-building-${index}`}>
-            <Rect
-              x={building.x}
-              y={building.y}
-              width={building.width}
-              height={building.height}
-              fill={index % 2 === 0 ? distant : near}
-              stroke={colors.ink}
-              strokeWidth={2}
-              opacity={theme.kind === 'street' ? 0.78 : 0.9}
-            />
-            {building.windows.map((window, windowIndex) => (
-              <Rect
-                key={`stage-${stage}-building-${index}-window-${windowIndex}`}
-                x={window.x}
-                y={window.y}
-                width={window.width}
-                height={window.height}
-                rx={1}
-                fill={window.lit ? accent : theme.alternate}
-                opacity={window.lit ? window.opacity : 0.14}
-              />
-            ))}
-          </G>
-        ))}
-        {theme.kind === 'street' && (
-          <>
-            <Path
-              d={`M0 ${height * 0.82} H${width}`}
-              stroke={accent}
-              strokeWidth={2}
-              opacity={0.74}
-            />
-            <Path
-              d={`M${width * 0.16} ${height * 0.81} V${height * 0.53} L${width * 0.2} ${height * 0.49} L${width * 0.24} ${height * 0.53} V${height * 0.81} M${width * 0.8} ${height * 0.81} V${height * 0.57} L${width * 0.84} ${height * 0.53} L${width * 0.88} ${height * 0.57} V${height * 0.81}`}
-              fill="none"
-              stroke={theme.alternate}
-              strokeWidth={3}
-              opacity={0.76}
-            />
-            <Path
-              d={`M0 ${height * 0.87} H${width} M${width * 0.1} ${height * 0.91} h${width * 0.14} M${width * 0.43} ${height * 0.91} h${width * 0.14} M${width * 0.76} ${height * 0.91} h${width * 0.14}`}
-              stroke={colors.paper}
-              strokeWidth={3}
-              opacity={0.45}
-            />
-          </>
-        )}
-        {theme.kind === 'space' && (
-          <>
-            <Circle cx={width * 0.76} cy={height * 0.29} r={orbRadius * 1.35} fill={orb} opacity={0.5} />
-            <Ellipse
-              cx={width * 0.76}
-              cy={height * 0.29}
-              rx={orbRadius * 1.95}
-              ry={orbRadius * 0.44}
-              fill="none"
-              stroke={accent}
-              strokeWidth={2}
-              opacity={0.7}
-              transform={`rotate(-18 ${width * 0.76} ${height * 0.29})`}
-            />
-            <Circle cx={width * 0.18} cy={height * 0.54} r={5} fill={theme.alternate} opacity={0.7} />
-            <Circle cx={width * 0.9} cy={height * 0.58} r={3} fill={colors.paper} opacity={0.6} />
-          </>
-        )}
-        {theme.kind === 'galaxy' && (
-          <>
-            <Ellipse
-              cx={width * 0.52}
-              cy={height * 0.4}
-              rx={width * 0.36}
-              ry={height * 0.12}
-              fill="none"
-              stroke={accent}
-              strokeWidth={8}
-              opacity={0.25}
-              transform={`rotate(-22 ${width * 0.52} ${height * 0.4})`}
-            />
-            <Path
-              d={`M${width * 0.1} ${height * 0.48} C${width * 0.3} ${height * 0.22}, ${width * 0.66} ${height * 0.64}, ${width * 0.88} ${height * 0.24} M${width * 0.15} ${height * 0.32} C${width * 0.35} ${height * 0.66}, ${width * 0.65} ${height * 0.18}, ${width * 0.92} ${height * 0.52}`}
-              fill="none"
-              stroke={theme.alternate}
-              strokeWidth={3}
-              opacity={0.48}
-            />
-            <Circle cx={width * 0.52} cy={height * 0.4} r={orbRadius * 0.62} fill={orb} opacity={0.56} />
-          </>
-        )}
-        {theme.kind === 'void' && (
-          <>
-            <Path
-              d={`M${width * 0.24} ${height * 0.27} C${width * 0.42} ${height * 0.13}, ${width * 0.68} ${height * 0.2}, ${width * 0.76} ${height * 0.41} C${width * 0.83} ${height * 0.64}, ${width * 0.56} ${height * 0.73}, ${width * 0.39} ${height * 0.57} C${width * 0.22} ${height * 0.42}, ${width * 0.35} ${height * 0.24}, ${width * 0.54} ${height * 0.29}`}
-              fill="none"
-              stroke={accent}
-              strokeWidth={5}
-              opacity={0.42}
-            />
-            <Ellipse
-              cx={width * 0.53}
-              cy={height * 0.42}
-              rx={width * 0.08}
-              ry={height * 0.16}
-              fill={colors.ink}
-              stroke={theme.alternate}
-              strokeWidth={2}
-              opacity={0.92}
-              transform={`rotate(24 ${width * 0.53} ${height * 0.42})`}
-            />
-          </>
-        )}
-        {(theme.kind === 'space' || theme.kind === 'galaxy' || theme.kind === 'void') && (
-          <Ellipse
-            cx={orbX}
-            cy={orbY}
-            rx={orbRadius * 1.65}
-            ry={orbRadius * 0.4}
-            fill="none"
-            stroke={accent}
-            strokeWidth={2}
-            opacity={0.46}
-            transform={`rotate(-18 ${orbX} ${orbY})`}
-          />
-        )}
       </Svg>
-      <Animated.View
-        style={[
-          styles.backdropOrb,
-          {
-            left: orbX - orbRadius,
-            top: orbY - orbRadius,
-            width: orbRadius * 2,
-            height: orbRadius * 2,
-            backgroundColor: orb,
-            borderColor: accent,
-          },
-          orbPulseStyle,
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.backdropComet,
-          {
-            left: -92,
-            top: height * (isBossStage ? 0.47 : 0.43),
-            width: isBossStage ? 96 : 70,
-            height: isBossStage ? 4 : 3,
-            backgroundColor: accent,
-          },
-          cometStyle,
-        ]}
-      />
       {isBossStage && (
         <Animated.View
           style={[
             styles.backdropComet,
             {
-              left: -142,
-              top: height * 0.54,
-              width: 42,
-              height: 2,
-              backgroundColor: colors.gold,
+              left: -92,
+              top: height * 0.47,
+              width: isFinalStage ? 110 : 84,
+              height: 3,
+              backgroundColor: accent,
             },
             cometStyle,
           ]}
@@ -2128,11 +1994,10 @@ const styles = StyleSheet.create({
     borderColor: colors.ink,
     position: 'relative',
   },
-  backdropOrb: {
-    position: 'absolute',
-    borderRadius: 999,
-    borderWidth: 2,
-    zIndex: 1,
+  backdropShade: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.midnight,
+    opacity: 0.12,
   },
   backdropComet: {
     position: 'absolute',
