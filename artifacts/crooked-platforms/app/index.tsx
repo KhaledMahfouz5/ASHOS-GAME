@@ -16,6 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import Animated, {
+  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
@@ -37,7 +38,7 @@ import { BossArt, EnemyArt, type BossKind, type EnemyKind } from '../components/
 const colors = rawColors.light;
 
 type Mode = 'menu' | 'wardrobe' | 'playing' | 'lost' | 'won';
-type SkinId = 'starter' | 'ember' | 'ocean' | 'royal' | 'sun' | 'armor' | 'shadowCat' | 'ghost';
+type SkinId = 'starter' | 'ember' | 'ocean' | 'royal' | 'sun' | 'armor' | 'shadowCat' | 'plasma' | 'ghost';
 
 type SkinDefinition = {
   id: SkinId;
@@ -194,6 +195,17 @@ const skins: SkinDefinition[] = [
     evolvesAfterStage: 50,
     evolvedName: 'نمر النور والظل',
   },
+  {
+    id: 'plasma',
+    name: 'بطل البلازما',
+    price: 200,
+    body: colors.gold,
+    accent: colors.sky,
+    imageSource: require('../assets/characters/plasma-hero.jpg'),
+    evolvedImageSource: require('../assets/characters/plasma-evolved.jpg'),
+    evolvesAfterStage: 50,
+    evolvedName: 'بطل العدالة البلازمية',
+  },
   { id: 'ghost', name: 'الشبح', price: 160, body: colors.paper, accent: colors.sky },
 ];
 
@@ -221,6 +233,22 @@ function CreatureArt({
   const skin = skins.find((item) => item.id === skinId) ?? skins[0];
   const hasEvolved = skin.evolvesAfterStage !== undefined && progressStage > skin.evolvesAfterStage;
   const imageSource = hasEvolved ? skin.evolvedImageSource ?? skin.imageSource : skin.imageSource;
+  const evolutionPulse = useSharedValue(0);
+  useEffect(() => {
+    cancelAnimation(evolutionPulse);
+    if (!hasEvolved) {
+      evolutionPulse.value = 0;
+      return;
+    }
+    evolutionPulse.value = withSequence(
+      withTiming(0.24, { duration: 180, easing: Easing.out(Easing.cubic) }),
+      withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }),
+    );
+    return () => cancelAnimation(evolutionPulse);
+  }, [evolutionPulse, hasEvolved]);
+  const evolutionPulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + evolutionPulse.value }],
+  }));
   if (imageSource) {
     return (
       <View
@@ -234,7 +262,9 @@ function CreatureArt({
           },
         ]}
       >
-        <Image source={imageSource} style={styles.characterImage} resizeMode="cover" />
+        <Animated.View style={[styles.characterImageMotion, evolutionPulseStyle]}>
+          <Image source={imageSource} style={styles.characterImage} resizeMode="cover" />
+        </Animated.View>
       </View>
     );
   }
@@ -1641,6 +1671,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  characterImageMotion: {
+    width: '100%',
+    height: '100%',
   },
   characterImage: {
     width: '100%',
