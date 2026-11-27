@@ -297,6 +297,98 @@ function CreatureArt({
   );
 }
 
+function AnimatedRunnerArt({
+  skinId,
+  progressStage,
+  grounded,
+  moving,
+  verticalVelocity,
+}: {
+  skinId: SkinId;
+  progressStage: number;
+  grounded: boolean;
+  moving: boolean;
+  verticalVelocity: number;
+}) {
+  const skin = skins.find((item) => item.id === skinId) ?? skins[0];
+  const runCycle = useSharedValue(0);
+  const running = grounded && moving;
+  const jumping = !grounded && verticalVelocity < 0;
+
+  useEffect(() => {
+    cancelAnimation(runCycle);
+    if (running) {
+      runCycle.value = withRepeat(
+        withTiming(1, { duration: 145, easing: Easing.linear }),
+        -1,
+        true,
+      );
+    } else {
+      runCycle.value = withTiming(0, { duration: 100, easing: Easing.out(Easing.quad) });
+    }
+    return () => cancelAnimation(runCycle);
+  }, [runCycle, running]);
+
+  const leftArmStyle = useAnimatedStyle(() => {
+    const swing = Math.sin(runCycle.value * Math.PI * 2) * 44;
+    return {
+      transform: [{ rotateZ: grounded ? `${swing}deg` : jumping ? '-48deg' : '-18deg' }],
+    };
+  });
+  const rightArmStyle = useAnimatedStyle(() => {
+    const swing = Math.sin(runCycle.value * Math.PI * 2) * 44;
+    return {
+      transform: [{ rotateZ: grounded ? `${-swing}deg` : jumping ? '48deg' : '18deg' }],
+    };
+  });
+  const leftLegStyle = useAnimatedStyle(() => {
+    const swing = Math.sin(runCycle.value * Math.PI * 2) * 38;
+    return {
+      transform: [{ rotateZ: grounded ? `${-swing}deg` : jumping ? '24deg' : '-16deg' }],
+    };
+  });
+  const rightLegStyle = useAnimatedStyle(() => {
+    const swing = Math.sin(runCycle.value * Math.PI * 2) * 38;
+    return {
+      transform: [{ rotateZ: grounded ? `${swing}deg` : jumping ? '-24deg' : '16deg' }],
+    };
+  });
+  const bodyMotionStyle = useAnimatedStyle(() => {
+    if (!grounded) {
+      return {
+        transform: [
+          { scaleX: jumping ? 0.96 : 1.03 },
+          { scaleY: jumping ? 1.07 : 0.94 },
+        ],
+      };
+    }
+    const bounce = running ? Math.abs(Math.sin(runCycle.value * Math.PI * 2)) : 0;
+    return {
+      transform: [{ translateY: -bounce * 1.5 }, { scaleY: 1 - bounce * 0.035 }],
+    };
+  });
+
+  return (
+    <View style={styles.runnerCanvas}>
+      <Animated.View style={[styles.runnerLimb, styles.runnerArmLeft, { backgroundColor: skin.body }, leftArmStyle]}>
+        <View style={[styles.runnerHand, { backgroundColor: skin.accent }]} />
+      </Animated.View>
+      <Animated.View style={[styles.runnerLimb, styles.runnerArmRight, { backgroundColor: skin.body }, rightArmStyle]}>
+        <View style={[styles.runnerHand, { backgroundColor: skin.accent }]} />
+      </Animated.View>
+      <Animated.View style={[styles.runnerLimb, styles.runnerLegLeft, { backgroundColor: skin.body }, leftLegStyle]}>
+        <View style={[styles.runnerFoot, { backgroundColor: skin.accent }]} />
+      </Animated.View>
+      <Animated.View style={[styles.runnerLimb, styles.runnerLegRight, { backgroundColor: skin.body }, rightLegStyle]}>
+        <View style={[styles.runnerFoot, { backgroundColor: skin.accent }]} />
+      </Animated.View>
+      <Animated.View style={[styles.runnerBodyMotion, bodyMotionStyle]}>
+        <CreatureArt size={38} skinId={skinId} progressStage={progressStage} />
+      </Animated.View>
+    </View>
+  );
+}
+
 function DoorArt() {
   return (
     <Svg width={50} height={66} viewBox="0 0 50 66">
@@ -1453,19 +1545,19 @@ export default function GameScreen() {
             style={[
               styles.player,
               {
-                left: snapshot.x - cameraX,
-                top: snapshot.y,
-                transform: snapshot.grounded && (controls.current.left || controls.current.right)
-                  ? [
-                      { translateY: -Math.abs(Math.sin(snapshot.elapsed / 48)) * 2 },
-                      { rotateZ: `${Math.sin(snapshot.elapsed / 48) * 4}deg` },
-                      { scaleX: controls.current.left ? -1 : 1 },
-                    ]
-                  : undefined,
+                left: snapshot.x - cameraX - 14,
+                top: snapshot.y - 20,
+                transform: [{ scaleX: controls.current.left ? -1 : 1 }],
               },
             ]}
           >
-            <CreatureArt size={36} skinId={profile.equippedSkin} progressStage={profile.unlockedStage} />
+            <AnimatedRunnerArt
+              skinId={profile.equippedSkin}
+              progressStage={profile.unlockedStage}
+              grounded={snapshot.grounded}
+              moving={controls.current.left || controls.current.right}
+              verticalVelocity={snapshot.vy}
+            />
           </View>
         </View>
 
@@ -2108,11 +2200,70 @@ const styles = StyleSheet.create({
   },
   player: {
     position: 'absolute',
-    width: 36,
-    height: 40,
+    width: 60,
+    height: 56,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+  runnerCanvas: {
+    width: 60,
+    height: 56,
+  },
+  runnerBodyMotion: {
+    position: 'absolute',
+    left: 11,
+    top: 0,
+    zIndex: 3,
+  },
+  runnerLimb: {
+    position: 'absolute',
+    width: 9,
+    height: 18,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    zIndex: 1,
+  },
+  runnerArmLeft: {
+    left: 4,
+    top: 18,
+  },
+  runnerArmRight: {
+    right: 4,
+    top: 18,
+  },
+  runnerLegLeft: {
+    left: 20,
+    bottom: 0,
+    width: 9,
+    height: 15,
+  },
+  runnerLegRight: {
+    left: 33,
+    bottom: 0,
+    width: 9,
+    height: 15,
+  },
+  runnerHand: {
+    position: 'absolute',
+    right: -5,
+    bottom: -3,
+    width: 12,
+    height: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.ink,
+  },
+  runnerFoot: {
+    position: 'absolute',
+    right: -5,
+    bottom: -2,
+    width: 14,
+    height: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.ink,
   },
   controls: {
     width: '100%',
