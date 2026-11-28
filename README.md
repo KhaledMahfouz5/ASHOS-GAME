@@ -15,6 +15,8 @@ pnpm install
 pnpm --filter @workspace/crooked-platforms run dev
 ```
 
+Metro listens on port 8081 by default; set `PORT` to use a different port. The Replit-specific environment variables are optional when running locally.
+
 Then open the Expo preview with Expo Go on Android or iPhone.
 
 ## Controls
